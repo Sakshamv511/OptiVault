@@ -584,13 +584,27 @@ h1{ font-size:26px; font-weight:600; }
 
 .pass-intro{ font-size:11px; color:var(--sub); margin-bottom:14px; line-height:1.5; }
 
+.pass-wrap{ position:relative; }
+
 .pass-input{
   width:100%; border:1px solid var(--line);
-  padding:12px; margin-bottom:14px;
+  padding:12px 44px 12px 12px; margin-bottom:14px;
   font-size:20px; letter-spacing:.5em; text-align:center;
   font-family:Arial,Helvetica,sans-serif;
 }
 .pass-input:focus{ outline:none; border-color:var(--blue); }
+
+.pw-toggle{
+  position:absolute;
+  top:0; bottom:14px; right:2px;
+  margin:auto 0;
+  width:34px; height:34px;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:6px;
+  color:var(--sub);
+}
+.pw-toggle:hover{ color:var(--blue); background:var(--wash); }
+.pw-toggle svg{ width:18px; height:18px; display:block; }
 
 .pass-error{
   border-left:3px solid var(--red);

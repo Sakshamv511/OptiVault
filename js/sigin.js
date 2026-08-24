@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   animateSlotCards();
   initSignInForm();
   initSignUpForm();
+  initPasswordToggles();
 });
 
 
@@ -295,8 +296,37 @@ function showRoleOnCard(role){
 
   if(role === 'platform-admin' && emailField && emailLabel){
     emailLabel.textContent = 'ADMIN EMAIL';
-    emailField.placeholder = 'admin@optivault.internal';
+    emailField.placeholder = 'Enter the admin email';
   }
+}
+
+
+/* ==========================================================
+   SHOW / HIDE PASSWORD
+   Every .pw-toggle button sits next to an input and flips
+   its type between "password" and "text".
+   ========================================================== */
+const EYE_ICON =
+  '<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.4"/></svg>';
+
+const EYE_OFF_ICON =
+  '<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 2.5l15 15M8.3 8.4a2.6 2.6 0 0 0 3.4 3.4M5.6 5.7C3.4 7 1 10 1 10s3.5 6 9 6c1.4 0 2.7-.4 3.8-1M12.3 4.3C11.6 4.1 10.8 4 10 4c-5.5 0-9 6-9 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function initPasswordToggles(){
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    const input = document.getElementById(btn.dataset.target);
+    if(!input) return;
+
+    btn.innerHTML = EYE_ICON;
+
+    btn.addEventListener('click', () => {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? EYE_ICON : EYE_OFF_ICON;
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+      input.focus({ preventScroll:true });
+    });
+  });
 }
 
 

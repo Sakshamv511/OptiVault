@@ -89,11 +89,17 @@
         <div class="field-pair">
           <div>
             <label class="field-label" for="newPassword">PASSWORD</label>
-            <input type="password" id="newPassword" placeholder="••••••••••" autocomplete="new-password" required>
+            <div class="pw-wrap">
+              <input type="password" id="newPassword" placeholder="••••••••••" autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore required>
+              <button type="button" class="pw-toggle" data-target="newPassword" aria-label="Show password"></button>
+            </div>
           </div>
           <div>
             <label class="field-label" for="confirmPassword">CONFIRM PASSWORD</label>
-            <input type="password" id="confirmPassword" placeholder="••••••••••" autocomplete="new-password" required>
+            <div class="pw-wrap">
+              <input type="password" id="confirmPassword" placeholder="••••••••••" autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore required>
+              <button type="button" class="pw-toggle" data-target="confirmPassword" aria-label="Show password"></button>
+            </div>
           </div>
         </div>
 
