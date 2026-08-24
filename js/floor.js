@@ -10,9 +10,8 @@
      5. SUGGESTIONS         what the optimizer is flagging
      6. REQUESTS            company admin asks for a new warehouse
      7. RENDER              draw everything from the data
-     8. EVENTS              form handling, filters, modals
+     8. EVENTS              form handling, filters, tabs
    ===================================================================== */
-
 
 /* =====================================================================
    1. STORAGE / SEED
@@ -27,7 +26,6 @@ const FLOOR_KEYS = {
   extraSites:      'optivault-approved-warehouses',
   removedSites:    'optivault-removed-warehouses'
 };
-
 
 /* =====================================================================
    THE THREE WAREHOUSES THIS COMPANY RUNS
@@ -62,17 +60,14 @@ let WAREHOUSE_DIRECTORY = [
   }
 ];
 
-
 function warehouseInfo(id){
   return WAREHOUSE_DIRECTORY.find(entry => entry.id === id) || null;
 }
-
 
 /* Rack layouts differ per site, which is why the three warehouses
    report different capacity. distanceFromDock is what makes the
    velocity ranking possible: 1 = at the loading dock. */
 const RACK_PLANS = {
-
   'WH-MOH': [
     { id:'A', name:'Rack A', zone:'Fast-pick',       distanceFromDock:1, maxVolume:900,  maxWeight:450 },
     { id:'F', name:'Rack F', zone:'Outbound stage',  distanceFromDock:1, maxVolume:600,  maxWeight:300 },
@@ -81,7 +76,6 @@ const RACK_PLANS = {
     { id:'E', name:'Rack E', zone:'Returns staging', distanceFromDock:4, maxVolume:700,  maxWeight:350 },
     { id:'D', name:'Rack D', zone:'Reserve cage',    distanceFromDock:5, maxVolume:1200, maxWeight:700 }
   ],
-
   'WH-CHD': [
     { id:'A', name:'Rack A', zone:'Fast-pick',      distanceFromDock:1, maxVolume:800,  maxWeight:400 },
     { id:'B', name:'Rack B', zone:'Outbound stage', distanceFromDock:2, maxVolume:700,  maxWeight:350 },
@@ -89,7 +83,6 @@ const RACK_PLANS = {
     { id:'D', name:'Rack D', zone:'Reserve cage',   distanceFromDock:4, maxVolume:1000, maxWeight:600 },
     { id:'E', name:'Rack E', zone:'Deep store',     distanceFromDock:5, maxVolume:1300, maxWeight:800 }
   ],
-
   'WH-PAT': [
     { id:'A', name:'Rack A', zone:'Fast-pick',    distanceFromDock:1, maxVolume:700,  maxWeight:350 },
     { id:'B', name:'Rack B', zone:'Bulk overrun', distanceFromDock:2, maxVolume:1500, maxWeight:950 },
@@ -97,7 +90,6 @@ const RACK_PLANS = {
     { id:'D', name:'Rack D', zone:'Reserve cage', distanceFromDock:5, maxVolume:1200, maxWeight:700 }
   ]
 };
-
 
 /* Warehouses the platform admin has approved get stored separately
    and merged in here, so every page that loads this file sees them
@@ -112,7 +104,6 @@ function loadApprovedSites(){
   }
 }
 
-
 function saveApprovedSites(list){
   try{
     localStorage.setItem(FLOOR_KEYS.extraSites, JSON.stringify(list));
@@ -120,7 +111,6 @@ function saveApprovedSites(list){
     console.warn('Could not save approved warehouses:', err);
   }
 }
-
 
 function mergeApprovedSites(){
   loadApprovedSites().forEach(site => {
@@ -143,7 +133,6 @@ function mergeApprovedSites(){
 
 // runs as soon as this file loads, before any page code
 mergeApprovedSites();
-
 
 /* Deleted warehouses (approved removal requests) drop out here,
    so a removed site does not reappear on the next page load. */
@@ -173,11 +162,9 @@ function applyRemovedSites(){
 
 applyRemovedSites();
 
-
 /* Four bays per rack, two levels per bay = 8 slots per rack. */
 const BAYS_PER_RACK = 4;
 const LEVELS_PER_BAY = 2;
-
 
 function buildEmptyWarehouse(id){
   const info = warehouseInfo(id);
@@ -185,7 +172,6 @@ function buildEmptyWarehouse(id){
 
   const racks = plan.map(entry => {
     const slots = [];
-
     for(let bay = 1; bay <= BAYS_PER_RACK; bay++){
       for(let level = 1; level <= LEVELS_PER_BAY; level++){
         slots.push({
@@ -198,7 +184,6 @@ function buildEmptyWarehouse(id){
         });
       }
     }
-
     return {
       id: entry.id,
       name: entry.name,
@@ -218,11 +203,9 @@ function buildEmptyWarehouse(id){
   };
 }
 
-
 /* Opening stock per site, so the three warehouses do not look alike.
    These go through the real algorithm, not straight into slots. */
 const SEED_STOCK = {
-
   'WH-MOH': [
     { sku:'SKU-88213', name:'Pallet wrap',     l:100, w:80, h:70, weight:22, velocity:'fast',   fragile:false, qty:16 },
     { sku:'SKU-40410', name:'Carton stock',    l:80,  w:60, h:60, weight:14, velocity:'fast',   fragile:false, qty:14 },
@@ -233,7 +216,6 @@ const SEED_STOCK = {
     { sku:'SKU-73004', name:'Spare motors',    l:60,  w:60, h:60, weight:28, velocity:'slow',   fragile:false, qty:9 },
     { sku:'SKU-55021', name:'Glass panels',    l:100, w:70, h:40, weight:20, velocity:'slow',   fragile:true,  qty:3 }
   ],
-
   'WH-CHD': [
     { sku:'SKU-30112', name:'Retail cartons',  l:80,  w:60, h:50, weight:12, velocity:'fast',   fragile:false, qty:12 },
     { sku:'SKU-21877', name:'Label rolls',     l:40,  w:40, h:30, weight:4,  velocity:'fast',   fragile:false, qty:14 },
@@ -242,7 +224,6 @@ const SEED_STOCK = {
     { sku:'SKU-55021', name:'Glass panels',    l:100, w:70, h:40, weight:20, velocity:'slow',   fragile:true,  qty:2 },
     { sku:'SKU-73004', name:'Spare motors',    l:60,  w:60, h:60, weight:28, velocity:'slow',   fragile:false, qty:6 }
   ],
-
   'WH-PAT': [
     { sku:'SKU-90355', name:'Bulk sacks',      l:110, w:90, h:60, weight:34, velocity:'slow',   fragile:false, qty:9 },
     { sku:'SKU-73004', name:'Spare motors',    l:60,  w:60, h:60, weight:28, velocity:'slow',   fragile:false, qty:8 },
@@ -250,7 +231,6 @@ const SEED_STOCK = {
     { sku:'SKU-30112', name:'Retail cartons',  l:80,  w:60, h:50, weight:12, velocity:'fast',   fragile:false, qty:6 }
   ]
 };
-
 
 /* Which warehouse is the supervisor working in right now? */
 function activeWarehouseId(){
@@ -260,7 +240,6 @@ function activeWarehouseId(){
 function storageKeyFor(id){
   return FLOOR_KEYS.warehousePrefix + id;
 }
-
 
 function loadWarehouse(id){
   try{
@@ -279,7 +258,6 @@ function loadWarehouse(id){
   return fresh;
 }
 
-
 function saveWarehouse(warehouse){
   try{
     localStorage.setItem(storageKeyFor(warehouse.id), JSON.stringify(warehouse));
@@ -288,12 +266,10 @@ function saveWarehouse(warehouse){
   }
 }
 
-
 function addLog(warehouse, text){
   warehouse.log.unshift({ text: text, at: Date.now() });
   warehouse.log = warehouse.log.slice(0, 20);
 }
-
 
 /* =====================================================================
    2. MEASUREMENTS
@@ -341,14 +317,11 @@ function hasFragile(slot){
   return slot.units.some(unit => unit.fragile);
 }
 
-
 function warehouseStats(warehouse){
   const slots = allSlots(warehouse);
-
   const capacity = slots.reduce((t, e) => t + e.slot.maxVolume, 0);
   const filled = slots.reduce((t, e) => t + usedVolume(e.slot), 0);
   const empty = slots.filter(e => e.slot.units.length === 0).length;
-
   return {
     capacityUsed: capacity ? Math.round((filled / capacity) * 100) : 0,
     usedLitres: Math.round(filled),
@@ -360,7 +333,6 @@ function warehouseStats(warehouse){
   };
 }
 
-
 /* =====================================================================
    3. THE ALGORITHM
    First-fit-decreasing, with two additions on top of the base heuristic:
@@ -368,13 +340,11 @@ function warehouseStats(warehouse){
      - a slot is only a candidate if it passes the safety checks
    ===================================================================== */
 
-
 /* Turn one stock entry into individual units. Bin packing works on
    units, not on a quantity field. */
 function expandToUnits(warehouse, entry){
   const units = [];
   const volume = volumeOf(entry.l, entry.w, entry.h);
-
   for(let i = 0; i < entry.qty; i++){
     units.push({
       ref: makeRef(),
@@ -388,15 +358,12 @@ function expandToUnits(warehouse, entry){
       addedAt: Date.now()
     });
   }
-
   return units;
 }
-
 
 function makeRef(){
   return 'U' + Math.random().toString(36).slice(2, 8).toUpperCase();
 }
-
 
 /* ---------------------------------------------------------------
    SAFETY CHECKS
@@ -404,32 +371,25 @@ function makeRef(){
    explain a refusal instead of just failing.
    --------------------------------------------------------------- */
 function slotAccepts(slot, unit){
-
   if(unit.volume > slot.maxVolume){
     return { ok:false, reason:'Unit is larger than the slot' };
   }
-
   if(usedVolume(slot) + unit.volume > slot.maxVolume){
     return { ok:false, reason:'Not enough space left' };
   }
-
   if(usedWeight(slot) + unit.weight > slot.maxWeight){
     return { ok:false, reason:'Would exceed the slot weight limit' };
   }
-
   // Nothing is ever stacked on top of something fragile.
   if(hasFragile(slot)){
     return { ok:false, reason:'Slot holds a fragile unit' };
   }
-
   // A fragile unit gets a slot to itself.
   if(unit.fragile && slot.units.length > 0){
     return { ok:false, reason:'Fragile unit needs an empty slot' };
   }
-
   return { ok:true };
 }
-
 
 /* ---------------------------------------------------------------
    SLOT RANKING
@@ -449,37 +409,84 @@ function rankSlots(candidates, unit){
     if(unit.velocity === 'fast' && da !== db){
       return da - db;                       // nearest dock first
     }
-
     if(unit.velocity === 'slow' && da !== db){
       return db - da;                       // deepest first
     }
-
     if(unit.velocity === 'medium'){
       const offsetA = Math.abs(da - middle);
       const offsetB = Math.abs(db - middle);
       if(offsetA !== offsetB) return offsetA - offsetB;
     }
-
     // Tie-break: least space left over after the unit goes in.
     return (freeVolume(a.slot) - unit.volume) - (freeVolume(b.slot) - unit.volume);
   });
 }
 
-
 /* ---------------------------------------------------------------
    FIND A SLOT
    Filter to slots that will accept the unit, rank them, take the
    first. That "take the first" is the first-fit part.
+
+   findSlotDetailed also hands back the full ranked shortlist, which
+   is what lets the allocation report explain the choice instead of
+   just announcing it. The decision itself is unchanged: ranked[0].
    --------------------------------------------------------------- */
-function findSlotFor(warehouse, unit){
-  const candidates = allSlots(warehouse)
-    .filter(entry => slotAccepts(entry.slot, unit).ok);
+function findSlotDetailed(warehouse, unit){
+  const everySlot = allSlots(warehouse);
+  const candidates = everySlot.filter(entry => slotAccepts(entry.slot, unit).ok);
 
-  if(candidates.length === 0) return null;
-
-  return rankSlots(candidates, unit)[0];
+  if(candidates.length === 0){
+    return { target:null, ranked:[], totalSlots: everySlot.length };
+  }
+  const ranked = rankSlots(candidates, unit);
+  return { target: ranked[0], ranked: ranked, totalSlots: everySlot.length };
 }
 
+function findSlotFor(warehouse, unit){
+  return findSlotDetailed(warehouse, unit).target;
+}
+
+/* ---------------------------------------------------------------
+   WHY THIS SLOT
+   Reads the shortlist the ranking produced and reports which rule
+   actually decided the winner. Pure reporting — it never changes
+   where a unit goes.
+   --------------------------------------------------------------- */
+function explainChoice(ranked, unit){
+  const chosen = ranked[0];
+  const distances = ranked.map(entry => entry.rack.distanceFromDock);
+  const spread = Array.from(new Set(distances)).sort((a, b) => a - b);
+  const leftover = Math.round(freeVolume(chosen.slot) - unit.volume);
+
+  let rule = 'Tightest fit';
+  let text = '';
+
+  if(spread.length > 1 && unit.velocity === 'fast'){
+    rule = 'Velocity';
+    text = `Fast mover, so the nearest rack with room wins. ${chosen.rack.name} sits ${chosen.rack.distanceFromDock} from the dock — the racks that had space ranged ${spread[0]} to ${spread[spread.length - 1]}.`;
+  }else if(spread.length > 1 && unit.velocity === 'slow'){
+    rule = 'Velocity';
+    text = `Slow mover, so it is stored deep and leaves the short walk free. ${chosen.rack.name} sits ${chosen.rack.distanceFromDock} from the dock — the furthest that had room.`;
+  }else if(spread.length > 1 && unit.velocity === 'medium'){
+    rule = 'Velocity';
+    const middle = (Math.min(...distances) + Math.max(...distances)) / 2;
+    text = `Medium mover, so it aims for the middle of the floor (${middle} from the dock). ${chosen.rack.name} at ${chosen.rack.distanceFromDock} was the closest rack to that.`;
+  }else{
+    text = `Every slot that could take this unit sat the same distance from the dock, so the tie-break decided it — the slot left with the least spare room.`;
+  }
+
+  const tied = ranked.filter(entry => entry.rack.distanceFromDock === chosen.rack.distanceFromDock).length;
+  if(rule === 'Velocity' && tied > 1){
+    text += ` ${tied} slots tied at that distance, so the tightest fit chose between them.`;
+  }
+
+  return {
+    rule: rule,
+    text: text,
+    leftover: leftover,
+    considered: ranked.length
+  };
+}
 
 /* ---------------------------------------------------------------
    ALLOCATE A BATCH
@@ -490,19 +497,40 @@ function findSlotFor(warehouse, unit){
 function allocateBatch(warehouse, units, options){
   const settings = options || {};
   const queue = units.slice().sort((a, b) => b.volume - a.volume);
-
   const placed = [];
   const rejected = [];
 
-  queue.forEach(unit => {
-    const target = findSlotFor(warehouse, unit);
+  queue.forEach((unit, index) => {
+    const search = findSlotDetailed(warehouse, unit);
+    const target = search.target;
 
     if(target){
+      // Worked out before the unit goes in, while the slot still
+      // shows the free space the decision was made against.
+      const why = explainChoice(search.ranked, unit);
+
       unit.slotId = target.slot.id;
       target.slot.units.push(unit);
-      placed.push({ unit: unit, slotId: target.slot.id, rack: target.rack.name });
+
+      placed.push({
+        unit: unit,
+        slotId: target.slot.id,
+        rack: target.rack.name,
+        rackId: target.rack.id,
+        zone: target.rack.zone,
+        distance: target.rack.distanceFromDock,
+        queuePosition: index + 1,
+        queueSize: queue.length,
+        totalSlots: search.totalSlots,
+        why: why
+      });
     }else{
-      rejected.push({ unit: unit, reason: whyNothingFits(warehouse, unit) });
+      rejected.push({
+        unit: unit,
+        reason: whyNothingFits(warehouse, unit),
+        queuePosition: index + 1,
+        queueSize: queue.length
+      });
       warehouse.pending.push(unit);
     }
   });
@@ -513,7 +541,6 @@ function allocateBatch(warehouse, units, options){
 
   return { placed: placed, rejected: rejected };
 }
-
 
 /* The most common refusal across the whole floor, so the message
    the supervisor sees is the actual blocker. */
@@ -526,10 +553,8 @@ function whyNothingFits(warehouse, unit){
 
   const tally = {};
   reasons.forEach(reason => { tally[reason] = (tally[reason] || 0) + 1; });
-
   return Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
 }
-
 
 /* =====================================================================
    4. ACTIONS
@@ -542,24 +567,20 @@ function addStock(warehouse, entry){
   if(result.rejected.length){
     addLog(warehouse, `${result.rejected.length} unit${result.rejected.length > 1 ? 's' : ''} of ${entry.sku} could not be placed.`);
   }
-
   saveWarehouse(warehouse);
   return result;
 }
-
 
 /* Removing stock frees capacity, which is exactly when the pending
    queue is worth retrying. That retry is the reallocation step. */
 function removeStock(warehouse, slotId, sku, quantity){
   const target = findSlotById(warehouse, slotId);
-
   if(!target){
     return { ok:false, message:`No slot called ${slotId} on this floor.` };
   }
 
   const wanted = String(sku).trim().toUpperCase();
   const matching = target.slot.units.filter(unit => unit.sku.toUpperCase() === wanted);
-
   if(matching.length === 0){
     return { ok:false, message:`${slotId} is not holding ${sku}.` };
   }
@@ -567,9 +588,10 @@ function removeStock(warehouse, slotId, sku, quantity){
   const count = Math.min(quantity, matching.length);
   const removing = matching.slice(0, count);
   const removingRefs = removing.map(unit => unit.ref);
+  const freedVolume = removing.reduce((total, unit) => total + unit.volume, 0);
+  const freedWeight = removing.reduce((total, unit) => total + unit.weight, 0);
 
   target.slot.units = target.slot.units.filter(unit => !removingRefs.includes(unit.ref));
-
   addLog(warehouse, `Removed ${count} × ${wanted} from ${target.slot.id}.`);
 
   const moved = runReallocation(warehouse);
@@ -578,29 +600,32 @@ function removeStock(warehouse, slotId, sku, quantity){
   return {
     ok: true,
     removed: count,
+    sku: wanted,
     slotId: target.slot.id,
-    reallocated: moved
+    rack: target.rack.name,
+    freedVolume: Math.round(freedVolume),
+    freedWeight: Math.round(freedWeight),
+    slotFillNow: slotFill(target.slot),
+    reallocated: moved.length,          // still a number for older callers
+    reallocatedDetail: moved
   };
 }
 
-
 /* Retry everything waiting in the pending queue now that space
-   has opened up. */
+   has opened up. Returns the units it managed to place, so the
+   reallocation can be shown rather than just counted. */
 function runReallocation(warehouse){
-  if(warehouse.pending.length === 0) return 0;
+  if(warehouse.pending.length === 0) return [];
 
   const waiting = warehouse.pending.slice();
   warehouse.pending = [];
-
   const result = allocateBatch(warehouse, waiting, { silent:true });
 
   if(result.placed.length){
     addLog(warehouse, `Reallocation placed ${result.placed.length} waiting unit${result.placed.length > 1 ? 's' : ''}.`);
   }
-
-  return result.placed.length;
+  return result.placed;
 }
-
 
 /* =====================================================================
    5. SUGGESTIONS
@@ -636,7 +661,6 @@ function buildSuggestions(warehouse){
   // rather than eight identical ones.
   warehouse.racks.forEach(rack => {
     const tight = rack.slots.filter(slot => slotFill(slot) >= 92);
-
     if(tight.length && rackFill(rack) < 90){
       list.push({
         severity: 'medium',
@@ -654,7 +678,6 @@ function buildSuggestions(warehouse){
     warehouse.pending.forEach(unit => {
       grouped[unit.sku] = (grouped[unit.sku] || 0) + 1;
     });
-
     Object.keys(grouped).forEach(sku => {
       list.push({
         severity: 'high',
@@ -691,7 +714,6 @@ function buildSuggestions(warehouse){
   return list;
 }
 
-
 /* =====================================================================
    6. WAREHOUSE REQUESTS
    A company admin cannot open a warehouse on their own. They file a
@@ -709,7 +731,6 @@ function loadRequests(){
   return [];
 }
 
-
 function saveRequests(list){
   try{
     localStorage.setItem(FLOOR_KEYS.requests, JSON.stringify(list));
@@ -718,19 +739,16 @@ function saveRequests(list){
   }
 }
 
-
 function makeRequestRef(){
   const year = new Date().getFullYear();
   const random = Math.floor(1000 + Math.random() * 9000);
   return `REQ-${year}-${random}`;
 }
 
-
 /* Filed by the company admin. Status starts as pending — nothing
    about the warehouse exists until the platform admin approves it. */
 function submitWarehouseRequest(details){
   const list = loadRequests();
-
   const request = {
     ref: makeRequestRef(),
     type: 'open',
@@ -744,37 +762,28 @@ function submitWarehouseRequest(details){
     submittedAt: Date.now(),
     decidedAt: null
   };
-
   list.unshift(request);
   saveRequests(list);
-
   return request;
 }
-
 
 function requestsForCompany(company){
   return loadRequests().filter(entry => entry.company === company);
 }
 
-
 /* Used by the platform admin page. */
 function decideRequest(ref, decision){
   const list = loadRequests();
   const found = list.find(entry => entry.ref === ref);
-
   if(!found) return null;
-
   found.status = decision;             // 'approved' or 'rejected'
   found.decidedAt = Date.now();
   saveRequests(list);
-
   return found;
 }
 
-
 /* ---------------------------------------------------------------
    APPROVING A REQUEST BUILDS A REAL WAREHOUSE
-
    Approval is not just a status change. It creates a slot map for
    the new site, gives it a passcode, and adds it to the directory —
    which is why the company sees a new warehouse card and the
@@ -787,36 +796,29 @@ const ZONE_NAMES = [
   'Returns staging', 'Overflow'
 ];
 
-
 function makeSiteId(city){
   const base = 'WH-' + city.replace(/[^a-z]/gi,'').slice(0,3).toUpperCase();
   let candidate = base;
   let counter = 2;
-
   while(WAREHOUSE_DIRECTORY.some(entry => entry.id === candidate)){
     candidate = base + counter;
     counter++;
   }
-
   return candidate;
 }
-
 
 function makePasscode(){
   return String(Math.floor(1000 + Math.random() * 9000));
 }
-
 
 /* Racks are sized to the slots the company asked for: eight slots
    per rack, and each rack sits a little further from the dock. */
 function buildRackPlan(slotsWanted){
   const rackCount = Math.max(2, Math.min(8, Math.round(slotsWanted / 8)));
   const plan = [];
-
   for(let i = 0; i < rackCount; i++){
     const letter = String.fromCharCode(65 + i);
     const deep = i >= rackCount / 2;
-
     plan.push({
       id: letter,
       name: 'Rack ' + letter,
@@ -826,15 +828,12 @@ function buildRackPlan(slotsWanted){
       maxWeight: deep ? 800 : 400
     });
   }
-
   return plan;
 }
-
 
 function approveWarehouseRequest(ref){
   const list = loadRequests();
   const request = list.find(entry => entry.ref === ref);
-
   if(!request) return null;
   if(request.status !== 'pending') return null;
 
@@ -868,21 +867,16 @@ function approveWarehouseRequest(ref){
   return { request: request, site: site };
 }
 
-
 function rejectWarehouseRequest(ref, reason){
   const list = loadRequests();
   const request = list.find(entry => entry.ref === ref);
-
   if(!request || request.status !== 'pending') return null;
-
   request.status = 'rejected';
   request.decidedAt = Date.now();
   request.reason = reason || '';
   saveRequests(list);
-
   return request;
 }
-
 
 /* ---------------------------------------------------------------
    DELETE REQUESTS
@@ -890,9 +884,9 @@ function rejectWarehouseRequest(ref, reason){
    they file a removal request, the platform admin decides. Approval
    drops the site from the directory and its slot map for good.
    --------------------------------------------------------------- */
+
 function submitDeleteRequest(details){
   const list = loadRequests();
-
   const request = {
     ref: makeRequestRef(),
     type: 'delete',
@@ -904,18 +898,14 @@ function submitDeleteRequest(details){
     submittedAt: Date.now(),
     decidedAt: null
   };
-
   list.unshift(request);
   saveRequests(list);
-
   return request;
 }
-
 
 function approveDeleteRequest(ref){
   const list = loadRequests();
   const request = list.find(entry => entry.ref === ref && entry.type === 'delete');
-
   if(!request || request.status !== 'pending') return null;
 
   const removed = loadRemovedSites();
@@ -934,15 +924,12 @@ function approveDeleteRequest(ref){
   request.status = 'approved';
   request.decidedAt = Date.now();
   saveRequests(list);
-
   return request;
 }
-
 
 function rejectDeleteRequest(ref){
   return decideRequest(ref, 'rejected');
 }
-
 
 /* ---------------------------------------------------------------
    COMPANY ACCOUNTS
@@ -960,7 +947,6 @@ function loadCompanyAccounts(){
   }
 }
 
-
 function saveCompanyAccounts(list){
   try{
     localStorage.setItem('optivault-companies', JSON.stringify(list));
@@ -969,20 +955,15 @@ function saveCompanyAccounts(list){
   }
 }
 
-
 function decideCompany(email, decision){
   const list = loadCompanyAccounts();
   const found = list.find(entry => entry.email === email);
-
   if(!found) return null;
-
   found.status = decision;             // 'approved' or 'rejected'
   found.decidedAt = Date.now();
   saveCompanyAccounts(list);
-
   return found;
 }
-
 
 /* =====================================================================
    7. RENDER
@@ -991,7 +972,8 @@ function decideCompany(email, decision){
 let WAREHOUSE = null;
 let activeFilter = 'all';
 let searchTerm = '';
-
+let activePane = 'floor';
+let LAST_REPORT = null;     // the last allocation or reallocation run
 
 function renderAll(){
   renderHeader();
@@ -1002,19 +984,17 @@ function renderAll(){
   renderSuggestions();
   renderPending();
   renderActivity();
+  renderAllocationReport();
 }
-
 
 function renderHeader(){
   const info = warehouseInfo(WAREHOUSE.id);
   const slots = allSlots(WAREHOUSE).length;
-
   setText('whName', WAREHOUSE.name);
   setText('whMeta', `${WAREHOUSE.id} · ${WAREHOUSE.racks.length} RACKS · ${slots} SLOTS`);
   setText('floorTitleMeta',
     `Rack-by-rack occupancy for ${info ? info.city : WAREHOUSE.id}, recalculated on every change.`);
 }
-
 
 function renderStats(){
   const stats = warehouseStats(WAREHOUSE);
@@ -1022,13 +1002,10 @@ function renderStats(){
 
   setText('statCapacity', stats.capacityUsed + '%');
   setText('statCapacitySub', `${stats.usedLitres} / ${stats.totalLitres} L`);
-
   setText('statFree', stats.emptySlots);
   setText('statFreeSub', `of ${stats.totalSlots} slots across ${stats.rackCount} racks`);
-
   setText('statPending', stats.pending);
   setText('statPendingSub', stats.pending ? 'waiting for space' : 'everything is placed');
-
   setText('statAlerts', suggestions.length);
 
   const high = suggestions.filter(s => s.severity === 'high').length;
@@ -1038,15 +1015,25 @@ function renderStats(){
 
   const alertCard = document.getElementById('statAlertsCard');
   if(alertCard) alertCard.classList.toggle('alert', suggestions.length > 0);
-}
 
+  // badge on the OPTIMIZER nav item
+  const badge = document.getElementById('navFlagCount');
+  if(badge){
+    badge.textContent = suggestions.length;
+    badge.hidden = suggestions.length === 0;
+  }
+  const waitBadge = document.getElementById('navPendingCount');
+  if(waitBadge){
+    waitBadge.textContent = stats.pending;
+    waitBadge.hidden = stats.pending === 0;
+  }
+}
 
 function fillClass(percent){
   if(percent >= 85) return 'high';
   if(percent >= 40) return 'mid';
   return 'low';
 }
-
 
 function renderRacks(){
   const host = document.getElementById('racks');
@@ -1082,7 +1069,6 @@ function renderRacks(){
   host.innerHTML = racks.map(rack => {
     const fill = rackFill(rack);
     const open = rack.slots.filter(slot => slot.units.length === 0).length;
-
     return `
       <div class="rack">
         <div class="rack-head">
@@ -1103,14 +1089,12 @@ function renderRacks(){
   }).join('');
 }
 
-
 function dockLabel(distance){
   if(distance <= 1) return 'at the dock';
   if(distance <= 2) return 'near the dock';
   if(distance <= 3) return 'mid floor';
   return 'deep floor';
 }
-
 
 function renderSlotRow(slot){
   const fill = slotFill(slot);
@@ -1124,7 +1108,6 @@ function renderSlotRow(slot){
   });
 
   const keys = Object.keys(groups);
-
   const contents = keys.length
     ? keys.map(sku => {
         const group = groups[sku];
@@ -1142,7 +1125,6 @@ function renderSlotRow(slot){
     </div>`;
 }
 
-
 /* Zone-level view — the macro read on top of the per-slot detail. */
 function renderZones(){
   const host = document.getElementById('zones');
@@ -1153,9 +1135,15 @@ function renderZones(){
     .sort((a, b) => a.distanceFromDock - b.distanceFromDock)
     .map(rack => {
       const fill = rackFill(rack);
+      const open = rack.slots.filter(slot => slot.units.length === 0).length;
+      const capacity = rack.slots.reduce((total, slot) => total + slot.maxVolume, 0);
+      const used = rack.slots.reduce((total, slot) => total + usedVolume(slot), 0);
       return `
         <div class="zone-row">
-          <span class="zone-name">${rack.zone}</span>
+          <div>
+            <span class="zone-name">${rack.zone}</span>
+            <span class="zone-meta">${rack.name} · ${dockLabel(rack.distanceFromDock)} · ${open} of ${rack.slots.length} slots empty · ${Math.round(used)} / ${Math.round(capacity)} L</span>
+          </div>
           <div class="zone-bar"><i class="${fillClass(fill)}" style="width:${fill}%"></i></div>
           <span class="zone-pct">${fill}%</span>
         </div>`;
@@ -1163,7 +1151,6 @@ function renderZones(){
 
   host.innerHTML = rows;
 }
-
 
 /* The small preview inside the 3D panel — same rack fills as
    everywhere else, ordered by distance from the dock. */
@@ -1183,28 +1170,43 @@ function renderMiniViz(){
     }).join('');
 }
 
-
+/* The optimizer pane. Every flag buildSuggestions() produces is
+   shown here, worst first — nothing is trimmed off. */
 function renderSuggestions(){
   const host = document.getElementById('suggestions');
   const count = document.getElementById('suggestionCount');
   if(!host) return;
 
   const list = buildSuggestions(WAREHOUSE);
-
   if(count) count.textContent = list.length;
 
+  const highCount = list.filter(item => item.severity === 'high').length;
+  setText('suggestionBreakdown', list.length
+    ? `${highCount} need attention now · ${list.length - highCount} worth watching`
+    : 'Every unit is placed and no rack is under pressure.');
+
   if(list.length === 0){
-    host.innerHTML = `<div class="sugg"><div class="t">Nothing to flag</div><div class="m">Every unit is placed and no rack is under pressure.</div></div>`;
+    host.innerHTML = `
+      <div class="opt-clear">
+        <b>Nothing to flag</b>
+        <span>All four checks came back clean. Every unit is in a slot, no rack is over 90%, no slot is over 92%, and no fast mover is sitting deep in the building.</span>
+      </div>`;
     return;
   }
 
-  host.innerHTML = list.slice(0, 6).map(item => `
-    <div class="sugg">
-      <div class="t">${item.title}</div>
-      <div class="m">${item.type}</div>
-    </div>`).join('');
+  const order = { high:0, medium:1, low:2 };
+  host.innerHTML = list
+    .slice()
+    .sort((a, b) => order[a.severity] - order[b.severity])
+    .map(item => `
+      <div class="opt-item ${item.severity}">
+        <span class="sev">${item.severity === 'high' ? 'ACT NOW' : 'WATCH'}</span>
+        <div class="opt-body">
+          <div class="t">${item.title}</div>
+          <div class="m">${item.type}</div>
+        </div>
+      </div>`).join('');
 }
-
 
 function renderPending(){
   const host = document.getElementById('pendingList');
@@ -1215,7 +1217,6 @@ function renderPending(){
     wrap.hidden = true;
     return;
   }
-
   wrap.hidden = false;
 
   const grouped = {};
@@ -1237,7 +1238,6 @@ function renderPending(){
   }).join('');
 }
 
-
 function renderActivity(){
   const host = document.getElementById('activity');
   if(!host) return;
@@ -1247,13 +1247,146 @@ function renderActivity(){
     return;
   }
 
-  host.innerHTML = WAREHOUSE.log.slice(0, 6).map(entry => `
+  host.innerHTML = WAREHOUSE.log.slice(0, 12).map(entry => `
     <div class="log-row">
       <span>${entry.text}</span>
       <span class="ago">${timeAgo(entry.at)}</span>
     </div>`).join('');
 }
 
+/* ---------------------------------------------------------------
+   THE ALLOCATION REPORT
+   This is the engine showing its working. Every unit the algorithm
+   placed is listed with the slot it went to and the rule that chose
+   that slot, and every refusal is listed with the reason.
+   --------------------------------------------------------------- */
+function renderAllocationReport(){
+  const host = document.getElementById('allocReport');
+  const idle = document.getElementById('allocIdle');
+  if(!host) return;
+
+  if(!LAST_REPORT){
+    host.innerHTML = '';
+    host.hidden = true;
+    if(idle) idle.hidden = false;
+    return;
+  }
+  host.hidden = false;
+  if(idle) idle.hidden = true;
+
+  host.innerHTML = LAST_REPORT.kind === 'add'
+    ? addReportHtml(LAST_REPORT)
+    : removeReportHtml(LAST_REPORT);
+}
+
+function addReportHtml(report){
+  const placed = report.placed;
+  const rejected = report.rejected;
+  const volumes = placed.concat(rejected).map(row => row.unit.volume);
+  const biggest = volumes.length ? Math.max(...volumes) : 0;
+  const smallest = volumes.length ? Math.min(...volumes) : 0;
+
+  const rows = placed.map(row => `
+    <div class="rep-row">
+      <span class="rep-n">#${row.queuePosition}</span>
+      <span class="rep-sku">${row.unit.sku}<em>${row.unit.volume} L · ${row.unit.weight} kg</em></span>
+      <span class="rep-arrow">→</span>
+      <span class="rep-slot">${row.slotId}<em>${row.rack} · ${dockLabel(row.distance)}</em></span>
+      <span class="rep-rule ${row.why.rule === 'Velocity' ? 'vel' : 'fit'}">${row.why.rule}</span>
+      <span class="rep-left">${row.why.leftover} L spare</span>
+    </div>`).join('');
+
+  const refusals = rejected.length ? `
+    <div class="rep-sub">Could not be placed</div>
+    ${rejected.map(row => `
+      <div class="rep-row bad">
+        <span class="rep-n">#${row.queuePosition}</span>
+        <span class="rep-sku">${row.unit.sku}<em>${row.unit.volume} L · ${row.unit.weight} kg</em></span>
+        <span class="rep-arrow">✕</span>
+        <span class="rep-slot">Waiting queue<em>retried automatically on the next removal</em></span>
+        <span class="rep-rule stop">Refused</span>
+        <span class="rep-left">${row.reason}</span>
+      </div>`).join('')}` : '';
+
+  // One line per distinct reason, so the panel explains itself
+  // without repeating the same sentence twelve times.
+  const reasons = [];
+  placed.forEach(row => {
+    if(!reasons.includes(row.why.text)) reasons.push(row.why.text);
+  });
+
+  const why = reasons.length ? `
+    <div class="rep-sub">Why the engine picked those slots</div>
+    <ul class="rep-why">
+      ${reasons.slice(0, 6).map(text => `<li>${text}</li>`).join('')}
+    </ul>` : '';
+
+  return `
+    <div class="rep-head">
+      <div>
+        <h4>Allocation run — ${report.sku}</h4>
+        <div class="rep-meta">${report.qty} unit${report.qty > 1 ? 's' : ''} sorted largest first, then each one took the best-ranked slot that would accept it.</div>
+      </div>
+      <button class="btn" type="button" data-goto-pane="floor">See it on the floor</button>
+    </div>
+
+    <div class="rep-chips">
+      <span class="chip good"><b>${placed.length}</b> placed</span>
+      <span class="chip ${rejected.length ? 'bad' : ''}"><b>${rejected.length}</b> waiting</span>
+      <span class="chip"><b>${biggest === smallest ? biggest + ' L' : smallest + '–' + biggest + ' L'}</b> unit volume</span>
+      <span class="chip"><b>${report.velocity}</b> mover</span>
+      ${report.fragile ? '<span class="chip warn"><b>Fragile</b> — needs its own slot</span>' : ''}
+    </div>
+
+    <div class="rep-step">
+      <b>Step 1 — decreasing.</b> The batch is sorted largest volume first, so the awkward units get the pick of the shelves while space is still open.
+      <b>Step 2 — first fit.</b> For each unit the engine filters to slots that pass the volume, weight and fragility checks, ranks what is left, and takes the first.
+    </div>
+
+    <div class="rep-rows">
+      ${rows}
+      ${refusals}
+    </div>
+    ${why}`;
+}
+
+function removeReportHtml(report){
+  const moved = report.reallocatedDetail || [];
+
+  const movedRows = moved.length ? `
+    <div class="rep-sub">Reallocation — units that were waiting and now have a slot</div>
+    ${moved.map(row => `
+      <div class="rep-row">
+        <span class="rep-n">#${row.queuePosition}</span>
+        <span class="rep-sku">${row.unit.sku}<em>${row.unit.volume} L · ${row.unit.weight} kg</em></span>
+        <span class="rep-arrow">→</span>
+        <span class="rep-slot">${row.slotId}<em>${row.rack} · ${dockLabel(row.distance)}</em></span>
+        <span class="rep-rule ${row.why.rule === 'Velocity' ? 'vel' : 'fit'}">${row.why.rule}</span>
+        <span class="rep-left">${row.why.leftover} L spare</span>
+      </div>`).join('')}`
+    : `<div class="rep-none">Nothing was waiting for space, so there was nothing to reallocate. The freed room stays open for the next putaway.</div>`;
+
+  return `
+    <div class="rep-head">
+      <div>
+        <h4>Removal — ${report.removed} × ${report.sku} from ${report.slotId}</h4>
+        <div class="rep-meta">Removing stock frees capacity, so the engine immediately retries everything sitting in the waiting queue.</div>
+      </div>
+      <button class="btn" type="button" data-goto-pane="floor">See it on the floor</button>
+    </div>
+
+    <div class="rep-chips">
+      <span class="chip good"><b>${report.removed}</b> removed</span>
+      <span class="chip"><b>${report.freedVolume} L</b> freed</span>
+      <span class="chip"><b>${report.freedWeight} kg</b> off the shelf</span>
+      <span class="chip"><b>${report.slotId}</b> now ${report.slotFillNow}% full</span>
+      <span class="chip ${moved.length ? 'good' : ''}"><b>${moved.length}</b> reallocated</span>
+    </div>
+
+    <div class="rep-rows">
+      ${movedRows}
+    </div>`;
+}
 
 function timeAgo(timestamp){
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -1265,17 +1398,16 @@ function timeAgo(timestamp){
   return Math.floor(hours / 24) + 'd ago';
 }
 
-
 function setText(id, value){
   const node = document.getElementById(id);
   if(node) node.textContent = value;
 }
 
-
 /* ---------------------------------------------------------------
    3D VIEW
    Each rack is drawn as a column of slots in an isometric frame.
    Height of the coloured part is the real fill of that slot.
+   Currently switched off in the UI — the code is kept intact.
    --------------------------------------------------------------- */
 function render3D(){
   const stage = document.getElementById('stage3d');
@@ -1288,7 +1420,6 @@ function render3D(){
     .sort((a, b) => a.distanceFromDock - b.distanceFromDock)
     .map(rack => {
       const bays = {};
-
       rack.slots.forEach(slot => {
         if(!bays[slot.bay]) bays[slot.bay] = [];
         bays[slot.bay].push(slot);
@@ -1300,11 +1431,9 @@ function render3D(){
           .sort((a, b) => a.level - b.level)
           .map(slot => {
             const fill = slotFill(slot);
-
             // 4px of plinth so an almost-empty slot is still visible,
             // then up to 34px more as the slot fills.
             const height = fill === 0 ? 0 : Math.round(4 + (fill / 100) * 34);
-
             return `
               <div class="box3 ${fill === 0 ? 'vacant' : fillClass(fill)}"
                    style="--h:${height}px"
@@ -1315,7 +1444,6 @@ function render3D(){
                 <div class="top"></div>
               </div>`;
           }).join('');
-
         return `<div class="bay">${levels}</div>`;
       }).join('');
 
@@ -1328,7 +1456,6 @@ function render3D(){
   renderRackKey();
 }
 
-
 /* The key under the 3D scene: readable text outside the rotation. */
 function renderRackKey(){
   const host = document.getElementById('rackKey');
@@ -1340,7 +1467,6 @@ function renderRackKey(){
     .map(rack => {
       const fill = rackFill(rack);
       const colour = fill >= 85 ? 'var(--red)' : fill >= 40 ? 'var(--mid)' : 'var(--redlt)';
-
       return `
         <div class="k">
           <span class="dot" style="background:${colour}"></span>
@@ -1352,25 +1478,23 @@ function renderRackKey(){
     }).join('');
 }
 
-
 /* =====================================================================
    8. EVENTS
    ===================================================================== */
 
 document.addEventListener('DOMContentLoaded', function(){
-
   // floor.js is also loaded by the warehouse picker and the company
   // dashboard, neither of which has a rack list. Nothing below applies
   // on those pages.
   if(!document.getElementById('racks')) return;
 
   if(!guardWarehouseAccess()) return;
-
   guardSession();
 
   WAREHOUSE = loadWarehouse(activeWarehouseId());
   renderAll();
 
+  initTabs();
   initAddForm();
   initRemoveForm();
   initFilters();
@@ -1380,26 +1504,62 @@ document.addEventListener('DOMContentLoaded', function(){
   initChangeWarehouse();
 });
 
+/* ---------------------------------------------------------------
+   NAVBAR TABS
+   One job per pane, so the supervisor is never looking at the whole
+   application at once. Every pane stays in the DOM and is shown or
+   hidden, which is why the renderers can keep writing to all of them.
+   --------------------------------------------------------------- */
+function initTabs(){
+  document.querySelectorAll('[data-pane]').forEach(link => {
+    link.addEventListener('click', function(){
+      showPane(link.dataset.pane);
+    });
+  });
+
+  // "See it on the floor" inside the allocation report, and any other
+  // in-page jump. Delegated, because the report is redrawn constantly.
+  document.addEventListener('click', function(event){
+    const jump = event.target.closest('[data-goto-pane]');
+    if(jump) showPane(jump.dataset.gotoPane);
+  });
+
+  showPane(activePane);
+}
+
+function showPane(name){
+  activePane = name;
+
+  document.querySelectorAll('[data-pane]').forEach(link => {
+    link.classList.toggle('on', link.dataset.pane === name);
+  });
+  document.querySelectorAll('[data-pane-body]').forEach(pane => {
+    pane.classList.toggle('on', pane.dataset.paneBody === name);
+  });
+
+  // The search box only filters the rack list, so it belongs to the
+  // floor view and is hidden everywhere else.
+  const search = document.getElementById('floorSearch');
+  if(search) search.style.visibility = (name === 'floor') ? 'visible' : 'hidden';
+
+  window.scrollTo(0, 0);
+}
 
 /* A supervisor reaches this page by picking a warehouse and entering
    its passcode. Landing here without doing that sends them back. */
 function guardWarehouseAccess(){
   const id = activeWarehouseId();
   const unlocked = localStorage.getItem(FLOOR_KEYS.unlocked);
-
   if(id && unlocked === id && warehouseInfo(id)){
     return true;
   }
-
   window.location.href = 'warehouse-select.html';
   return false;
 }
 
-
 function initChangeWarehouse(){
   const button = document.getElementById('changeWarehouse');
   if(!button) return;
-
   button.addEventListener('click', function(){
     localStorage.removeItem(FLOOR_KEYS.unlocked);
     localStorage.removeItem(FLOOR_KEYS.active);
@@ -1407,12 +1567,10 @@ function initChangeWarehouse(){
   });
 }
 
-
 /* Only a signed-in supervisor should reach this page. Opening the
    file directly still works, but it says so. */
 function guardSession(){
   let session = null;
-
   try{
     session = JSON.parse(localStorage.getItem(FLOOR_KEYS.session));
   }catch(err){
@@ -1432,7 +1590,6 @@ function guardSession(){
   }
 }
 
-
 function initialsOf(text){
   return text
     .split(/\s+/)
@@ -1441,7 +1598,6 @@ function initialsOf(text){
     .map(word => word[0].toUpperCase())
     .join('');
 }
-
 
 function initAddForm(){
   const form = document.getElementById('addForm');
@@ -1469,6 +1625,17 @@ function initAddForm(){
     }
 
     const result = addStock(WAREHOUSE, entry);
+
+    LAST_REPORT = {
+      kind: 'add',
+      sku: entry.sku,
+      qty: entry.qty,
+      velocity: entry.velocity,
+      fragile: entry.fragile,
+      placed: result.placed,
+      rejected: result.rejected
+    };
+
     renderAll();
 
     const placedText = result.placed.length
@@ -1494,18 +1661,15 @@ function initAddForm(){
   });
 }
 
-
 function groupPlacements(placed){
   const bySlot = {};
   placed.forEach(item => {
     bySlot[item.slotId] = (bySlot[item.slotId] || 0) + 1;
   });
-
   return Object.keys(bySlot)
     .map(slotId => `${slotId} (${bySlot[slotId]})`)
     .join(', ');
 }
-
 
 function validateEntry(entry){
   if(!entry.sku) return 'Enter a SKU.';
@@ -1516,7 +1680,6 @@ function validateEntry(entry){
   if(entry.qty > 40) return 'Add 40 units or fewer at a time.';
   return null;
 }
-
 
 function initRemoveForm(){
   const form = document.getElementById('removeForm');
@@ -1535,15 +1698,29 @@ function initRemoveForm(){
     }
 
     const result = removeStock(WAREHOUSE, slotId, sku, qty);
-    renderAll();
 
     if(!result.ok){
+      renderAll();
       showResult('bad', result.message, '');
       return;
     }
 
+    LAST_REPORT = {
+      kind: 'remove',
+      sku: result.sku,
+      removed: result.removed,
+      slotId: result.slotId,
+      rack: result.rack,
+      freedVolume: result.freedVolume,
+      freedWeight: result.freedWeight,
+      slotFillNow: result.slotFillNow,
+      reallocatedDetail: result.reallocatedDetail
+    };
+
+    renderAll();
+
     showResult('good',
-      `Removed ${result.removed} × ${sku.toUpperCase()} from ${result.slotId}`,
+      `Removed ${result.removed} × ${result.sku} from ${result.slotId}`,
       result.reallocated
         ? `Reallocation placed ${result.reallocated} waiting unit${result.reallocated > 1 ? 's' : ''}.`
         : 'No units were waiting for that space.');
@@ -1553,22 +1730,18 @@ function initRemoveForm(){
   });
 }
 
-
 function value(id){
   const node = document.getElementById(id);
   return node ? node.value.trim() : '';
 }
 
-
 function showResult(kind, title, detail){
   const box = document.getElementById('resultBox');
   if(!box) return;
-
   box.className = 'result ' + kind;
   box.innerHTML = `<div class="r-title">${title}</div>${detail ? `<div class="r-detail">${detail}</div>` : ''}`;
   box.hidden = false;
 }
-
 
 function initFilters(){
   document.querySelectorAll('[data-filter]').forEach(tab => {
@@ -1581,17 +1754,15 @@ function initFilters(){
   });
 }
 
-
 function initSearch(){
   const field = document.getElementById('floorSearch');
   if(!field) return;
-
   field.addEventListener('input', function(){
     searchTerm = field.value.trim().toLowerCase();
+    if(activePane !== 'floor') showPane('floor');
     renderRacks();
   });
 }
-
 
 function initModals(){
   const modal3d = document.getElementById('modal3d');
@@ -1634,15 +1805,14 @@ function initModals(){
   }
 }
 
-
 /* Rebuild the floor from scratch — useful before a demo. */
 function initReset(){
   const button = document.getElementById('resetFloor');
   if(!button) return;
-
   button.addEventListener('click', function(){
     localStorage.removeItem(storageKeyFor(WAREHOUSE.id));
     WAREHOUSE = loadWarehouse(activeWarehouseId());
+    LAST_REPORT = null;
     renderAll();
     showResult('good', 'Floor reset to seed stock', 'The warehouse map was rebuilt and re-allocated.');
   });
