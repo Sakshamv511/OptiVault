@@ -130,7 +130,7 @@ function openPasscode(siteId){
   if(!chosenWarehouse) return;
 
   const modal = document.getElementById('passModal');
-  const field = document.getElementById('passInput');
+  const field = document.getElementById('siteCode');
 
   setText('passSite', chosenWarehouse.name);
   setText('passCity', chosenWarehouse.city + ' · ' + chosenWarehouse.id);
@@ -139,6 +139,8 @@ function openPasscode(siteId){
 
   if(field){
     field.value = '';
+    field.dataset.real = '';
+    field.dataset.masked = '';
   }
 
   modal.classList.add('on');
@@ -181,16 +183,63 @@ function initPasscodeModal(){
     if(event.key === 'Escape') closePasscode();
   });
 
-  const field = document.getElementById('passInput');
+  const field = document.getElementById('siteCode');
   if(field){
     field.addEventListener('input', hidePassError);
+    maskPasscodeInput(field);
   }
 }
 
 
+/* ---------------------------------------------------------------
+   Manual dot-masking
+   The field is type="text" (not type="password") so that Chrome's
+   built-in key/eye password-manager icons never appear on a plain
+   4-digit site passcode. We fake the masked look ourselves and keep
+   the real digits in a data attribute for validation on submit.
+   --------------------------------------------------------------- */
+function maskPasscodeInput(field){
+  field.dataset.real = '';
+
+  field.addEventListener('input', function(event){
+    const cursorWasAtEnd = field.selectionStart === field.value.length;
+
+    // figure out the real digits from whatever the user just typed
+    const typed = field.value;
+    const prevMasked = field.dataset.masked || '';
+    let real = field.dataset.real || '';
+
+    if(typed.length > prevMasked.length){
+      // characters were added — the new ones are real input, not dots
+      const added = typed.slice(prevMasked.length).replace(/[^0-9]/g, '');
+      real += added;
+    }else{
+      // characters were removed
+      real = real.slice(0, typed.length);
+    }
+
+    real = real.slice(0, 12); // reasonable upper bound
+
+    const masked = '•'.repeat(real.length);
+    field.dataset.real = real;
+    field.dataset.masked = masked;
+    field.value = masked;
+
+    if(cursorWasAtEnd){
+      field.setSelectionRange(masked.length, masked.length);
+    }
+  });
+}
+
+
+function realPasscodeValue(field){
+  return field && field.dataset.real ? field.dataset.real : '';
+}
+
+
 function checkPasscode(){
-  const field = document.getElementById('passInput');
-  const entered = field ? field.value.trim() : '';
+  const field = document.getElementById('siteCode');
+  const entered = realPasscodeValue(field).trim();
 
   if(!chosenWarehouse) return;
 
@@ -207,6 +256,8 @@ function checkPasscode(){
         : 'That passcode does not match this warehouse.'
     );
     field.value = '';
+    field.dataset.real = '';
+    field.dataset.masked = '';
     field.focus();
     return;
   }
