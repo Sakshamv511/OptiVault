@@ -13,7 +13,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
         rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="../css/styles.css" />
 </head>
 
 <body>
@@ -27,7 +27,7 @@
                 <a href="#system">SYSTEM</a>
                 <a href="#impact">IMPACT</a>
                 <a href="#start">START</a>
-                <a href="#" class="btn-account">ACCOUNT</a>
+                <a href="#" class="btn-account" data-am-open>ACCOUNT</a>
 
                 <button class="theme-toggle mono" id="themeToggle" type="button" aria-label="Switch to dark mode"
                     title="Switch to dark mode">
@@ -61,7 +61,7 @@
                 </p>
 
                 <div class="d-flex flex-wrap gap-3 mt-4">
-                    <a href="#start" class="btn-primary mono">
+                    <a href="signup.html" class="btn-primary mono">
                         REQUEST ACCESS
                     </a>
 
@@ -622,49 +622,6 @@
     </section>
 
 
-    <!-- CTA -->
-    <section id="start" class="wrap">
-
-        <div class="cta">
-
-            <span class="mono hl small">
-                PILOT PROGRAM — ONE ZONE
-            </span>
-
-            <div class="row align-items-end mt-2">
-
-                <div class="col-lg-7">
-
-                    <h2 class="serif cta-title">
-                        Stop guessing where things go.
-                    </h2>
-
-                    <p class="lead-copy">
-                        Talk to us about piloting OptiVault in one zone of your warehouse.
-                        We map your slots, run allocation in parallel, and report the delta.
-                    </p>
-
-                </div>
-
-                <div class="col-lg-5 text-lg-end">
-
-                    <a href="#" class="btn-primary mono">
-                        REQUEST ACCESS
-                    </a>
-
-                    <p class="mono muted small mt-3">
-                        SETUP IN 2 WEEKS / NO WMS MIGRATION
-                    </p>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-
     <!-- FOOTER -->
     <footer class="site-footer">
 
@@ -729,7 +686,7 @@
             <div class="d-flex justify-content-between mono muted small footer-bottom">
 
                 <span>OPTIVAULT SYSTEMS</span>
-                <span>© 2026</span>
+                <span>©️ 2026</span>
 
             </div>
 
@@ -738,7 +695,110 @@
     </footer>
 
 
-    <script src="script.js"></script>
+    <!-- ACCESS MODAL -->
+    <div class="am-root" id="accessModal" aria-hidden="true">
+
+      <div class="am-panel" role="dialog" aria-modal="true"
+           aria-labelledby="amTitle" tabindex="-1">
+
+        <div class="am-head">
+
+          <div>
+            <div class="am-eyebrow"><i class="am-tick"></i> Access</div>
+
+            <h2 class="am-title" id="amTitle">How are you signing in?</h2>
+
+            <p class="am-sub">Pick the account you hold. This only decides
+              which sign-in form you get next.</p>
+          </div>
+
+          <button class="am-close" type="button"
+                  data-am-close aria-label="Close">&times;</button>
+
+        </div>
+
+
+        <div class="am-viewport">
+
+          <!-- STEP 1 -->
+          <div class="am-step" data-am-step="role">
+
+            <div class="am-options">
+
+              <button class="am-option" type="button" data-am-next="company">
+                <span>
+                  <span class="am-opt-tag">Organization</span>
+                  <span class="am-opt-name">Company</span>
+                  <span class="am-opt-desc">You work for a company whose
+                    warehouses run on OptiVault.</span>
+                </span>
+                <span class="am-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+
+              <button class="am-option" type="button" data-am-role="platform-admin">
+                <span>
+                  <span class="am-opt-tag">Internal</span>
+                  <span class="am-opt-name">Platform admin</span>
+                  <span class="am-opt-desc">OptiVault staff overseeing every
+                    client company and approving new warehouses.</span>
+                </span>
+                <span class="am-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <!-- STEP 2 -->
+          <div class="am-step" data-am-step="company" hidden>
+
+            <div class="am-trail">
+              <button class="am-back" type="button" data-am-back="role">&larr; Back</button>
+              <span class="am-trail-sep">/</span>
+              <span>Company</span>
+            </div>
+
+            <div class="am-options">
+
+              <button class="am-option" type="button" data-am-role="company-admin">
+                <span>
+                  <span class="am-opt-tag">Oversight</span>
+                  <span class="am-opt-name">Company admin</span>
+                  <span class="am-opt-desc">See every warehouse in your
+                    organization. View only — no stock changes.</span>
+                </span>
+                <span class="am-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+
+              <button class="am-option" type="button" data-am-role="supervisor">
+                <span>
+                  <span class="am-opt-tag">Warehouse floor</span>
+                  <span class="am-opt-name">Supervisor</span>
+                  <span class="am-opt-desc">Pick the warehouse you're assigned
+                    to. Each one needs its own passcode.</span>
+                </span>
+                <span class="am-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="am-foot">
+          <span>One sign-in per organization</span>
+          <span>No account? <a href="signup.html">Register your company</a></span>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <script src="../js/script.js"></script>
 
 </body>
 
