@@ -721,13 +721,35 @@ h1{ font-size:26px; font-weight:600; }
 /* ---------------- passcode modal ---------------- */
 .pass-panel{ max-width:400px; }
 .pass-intro{ font-size:11px; color:var(--sub); margin-bottom:14px; line-height:1.5; }
+<<<<<<< HEAD
+=======
+
+.pass-wrap{ position:relative; }
+
+>>>>>>> 4ae21333a66efd042dec2b623bb86c67c159b34e
 .pass-input{
   width:100%; border:1px solid var(--line);
-  padding:12px; margin-bottom:14px;
+  padding:12px 44px 12px 12px; margin-bottom:14px;
   font-size:20px; letter-spacing:.5em; text-align:center;
   font-family:Arial,Helvetica,sans-serif;
 }
 .pass-input:focus{ outline:none; border-color:var(--blue); }
+<<<<<<< HEAD
+=======
+
+.pw-toggle{
+  position:absolute;
+  top:0; bottom:14px; right:2px;
+  margin:auto 0;
+  width:34px; height:34px;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:6px;
+  color:var(--sub);
+}
+.pw-toggle:hover{ color:var(--blue); background:var(--wash); }
+.pw-toggle svg{ width:18px; height:18px; display:block; }
+
+>>>>>>> 4ae21333a66efd042dec2b623bb86c67c159b34e
 .pass-error{
   border-left:3px solid var(--red);
   background:#fdf1ef;

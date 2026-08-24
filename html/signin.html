@@ -77,7 +77,10 @@
         <input type="email" id="orgEmail" placeholder="Enter the email" autocomplete="username" required>
 
         <label class="field-label" for="orgPassword">PASSWORD</label>
-        <input type="password" id="orgPassword" placeholder="••••••••••" autocomplete="current-password" required>
+        <div class="pw-wrap">
+          <input type="password" id="orgPassword" placeholder="••••••••••" autocomplete="current-password" data-lpignore="true" data-1p-ignore data-bwignore required>
+          <button type="button" class="pw-toggle" data-target="orgPassword" aria-label="Show password"></button>
+        </div>
         <div class="field-hint">ENTER YOUR WORKSPACE PASSWORD</div>
 
         <div class="form-row">
