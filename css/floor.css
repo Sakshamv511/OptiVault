@@ -291,7 +291,10 @@ h1{ font-size:26px; font-weight:600; }
   display:flex; align-items:center; gap:7px;
   font-size:11px; margin-bottom:14px; color:#111; cursor:pointer;
 }
-.check input{ width:auto !important; margin:0 !important; accent-color:var(--blue); }
+.check input{
+  width:auto !important; margin:0 !important; accent-color:var(--blue);
+  appearance:auto; -webkit-appearance:checkbox; -moz-appearance:checkbox;
+}
 
 .card-tip{
   border-top:1px solid var(--line); margin-top:16px; padding-top:13px;
