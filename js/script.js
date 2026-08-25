@@ -1,6 +1,4 @@
-// =====================================================
-// OPTIVAULT — SLOT MAP + INTRO ANIMATION + THEME
-// =====================================================
+
 
 document.addEventListener("DOMContentLoaded", function () {
 
