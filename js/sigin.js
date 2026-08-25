@@ -1,22 +1,3 @@
-/* ==========================================================
-   SLOTWISE — Sign In / Sign Up page interactions
-   ==========================================================
-
-   HOW ACCESS WORKS (all client-side, LocalStorage only)
-
-   1. On the landing page the user picks a role in the modal.
-      That choice is saved as        optivault-role
-   2. Platform admin  -> one fixed credential kept in this file
-   3. Company         -> email + password looked up in
-                         optivault-companies
-   4. The role decides where they land after sign-in:
-        company-admin  -> sees every warehouse, view only
-        supervisor     -> picks a warehouse, then a passcode
-        platform-admin -> sees every company
-   ========================================================== */
-
-
-/* ---------- storage keys, kept in one place ---------- */
 const STORAGE = {
   companies: 'optivault-companies',
   role:      'optivault-role',
@@ -24,14 +5,14 @@ const STORAGE = {
 };
 
 
-/* ---------- the one platform-admin login (that's us) ---------- */
+
 const PLATFORM_ADMIN = {
   email:    'admin@optivault.internal',
   password: 'optivault2026'
 };
 
 
-/* ---------- where each role goes after a good sign-in ---------- */
+
 const ROLE_DESTINATIONS = {
   'company-admin':  'company-dashboard.html',
   'supervisor':     'warehouse-select.html',
@@ -39,7 +20,7 @@ const ROLE_DESTINATIONS = {
 };
 
 
-/* ---------- labels shown on the sign-in card ---------- */
+
 const ROLE_LABELS = {
   'company-admin':  'Company admin access',
   'supervisor':     'Supervisor access',
@@ -55,11 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/* ==========================================================
-   DEMO DATA
-   Creates one company the first time the site is opened,
-   so sign-in works straight away during a demo.
-   ========================================================== */
+
 function seedDemoData(){
   if(localStorage.getItem(STORAGE.companies)) return;
 
@@ -79,7 +56,7 @@ function seedDemoData(){
 }
 
 
-/* ---------- read / write the company list ---------- */
+
 function getCompanies(){
   try{
     return JSON.parse(localStorage.getItem(STORAGE.companies)) || [];
@@ -98,7 +75,7 @@ function saveCompanies(list){
 }
 
 
-/* ---------- which role did they pick in the modal? ---------- */
+
 function getSelectedRole(){
   const fromUrl = new URLSearchParams(window.location.search).get('role');
   const fromStore = localStorage.getItem(STORAGE.role);
@@ -106,8 +83,7 @@ function getSelectedRole(){
 }
 
 
-/* Animate each zone card's percentage + bar fill on load,
-   staggered left-to-right so the panel feels "live". */
+
 function animateSlotCards(){
   const cards = document.querySelectorAll('.scard');
   if(!cards.length) return;
@@ -138,11 +114,7 @@ function animateSlotCards(){
 }
 
 
-/* ==========================================================
-   SIGN IN
-   Validation is unchanged. The placeholder setTimeout is now
-   a real LocalStorage check.
-   ========================================================== */
+
 function initSignInForm(){
   const form = document.getElementById('signinForm');
   if(!form) return;
@@ -182,7 +154,7 @@ function initSignInForm(){
     btn.disabled = true;
     btnText.textContent = 'VERIFYING…';
 
-    // Short pause so the state change is visible.
+   
     setTimeout(() => {
 
       const result = checkCredentials(
@@ -215,10 +187,10 @@ function initSignInForm(){
 }
 
 
-/* ---------- the actual access check ---------- */
+
 function checkCredentials(role, emailValue, passwordValue){
 
-  // Platform admin is a single fixed login held in this file.
+
   if(role === 'platform-admin'){
     const matches =
       emailValue === PLATFORM_ADMIN.email &&
@@ -237,7 +209,6 @@ function checkCredentials(role, emailValue, passwordValue){
     };
   }
 
-  // Everyone else signs in with their company account.
   const company = getCompanies().find(
     item => item.email.toLowerCase() === emailValue
   );
@@ -270,7 +241,7 @@ function checkCredentials(role, emailValue, passwordValue){
 }
 
 
-/* ---------- remember who is signed in ---------- */
+
 function startSession(session){
   try{
     localStorage.setItem(STORAGE.session, JSON.stringify(session));
@@ -280,7 +251,7 @@ function startSession(session){
 }
 
 
-/* ---------- show the chosen role on the card ---------- */
+
 function showRoleOnCard(role){
   const banner = document.getElementById('roleBanner');
   const label = document.getElementById('roleLabel');
@@ -289,7 +260,7 @@ function showRoleOnCard(role){
   label.textContent = ROLE_LABELS[role] || 'Company access';
   banner.hidden = false;
 
-  // platform admin does not use a company email
+  
   const emailField = document.getElementById('orgEmail');
   const emailLabel = document.querySelector('label[for="orgEmail"]');
 
@@ -300,7 +271,7 @@ function showRoleOnCard(role){
 }
 
 
-/* ---------- error helpers ---------- */
+
 function showError(box, message){
   if(!box) return;
   box.textContent = message;
@@ -313,12 +284,7 @@ function hideError(box){
 }
 
 
-/* ==========================================================
-   SIGN UP — register a new company
-   Saves the company as "pending", then plays the success
-   screen where a grid of boxes clears away to reveal
-   the message.
-   ========================================================== */
+
 function initSignUpForm(){
   const form = document.getElementById('signupForm');
   if(!form) return;
@@ -343,7 +309,7 @@ function initSignUpForm(){
     hideError(errorBox);
     fields.forEach(field => field.classList.remove('field-error'));
 
-    // every field is required
+
     fields.forEach(field => {
       if(!field.value.trim()){
         field.classList.add('field-error');
@@ -377,7 +343,6 @@ function initSignUpForm(){
       return;
     }
 
-    // already registered?
     const companies = getCompanies();
     const emailValue = workEmail.value.trim().toLowerCase();
     const taken = companies.some(
@@ -402,7 +367,7 @@ function initSignUpForm(){
         email: emailValue,
         password: password.value,
         requestedWarehouses: parseInt(warehouses.value, 10),
-        status: 'pending',       // platform admin approves this
+        status: 'pending',       
         warehouses: []
       });
 
@@ -422,11 +387,7 @@ function initSignUpForm(){
 }
 
 
-/* ==========================================================
-   SUCCESS SCREEN
-   Fills the screen with boxes, clears them one by one,
-   then reveals the message underneath.
-   ========================================================== */
+
 function playSuccessScreen(company){
   const screen = document.getElementById('successScreen');
   const boxWrap = document.getElementById('successBoxes');
@@ -439,7 +400,7 @@ function playSuccessScreen(company){
   if(nameSlot) nameSlot.textContent = company;
   if(refSlot) refSlot.textContent = makeReference();
 
-  // how many rows fit the screen, 12 boxes per row
+
   const columns = 12;
   const boxSize = window.innerWidth / columns;
   const rows = Math.ceil(window.innerHeight / boxSize) + 1;
@@ -465,7 +426,7 @@ function playSuccessScreen(company){
     return;
   }
 
-  // same idea as the landing page: one box at a time
+  
   const blockDelay = 18;
 
   boxes.forEach((box, index) => {
@@ -482,7 +443,7 @@ function playSuccessScreen(company){
 }
 
 
-/* ---------- a reference number for the request ---------- */
+
 function makeReference(){
   const now = new Date();
   const year = now.getFullYear();
