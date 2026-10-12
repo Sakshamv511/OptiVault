@@ -2,7 +2,7 @@
 
 > **Frontend Project** · HTML5 · CSS3 · Vanilla JavaScript · Bootstrap 5 · LocalStorage
 
-**Live Demo:** [https://optivault-warehouse.vercel.app/](https://optivault-warehouse.vercel.app/)
+**Live Demo:** [Open OptiVault](https://optivault-warehouse.vercel.app/)
 
 ---
 
