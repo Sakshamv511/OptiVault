@@ -2,7 +2,7 @@
 
 > **Frontend Project** · HTML5 · CSS3 · Vanilla JavaScript · Bootstrap 5 · LocalStorage
 
-**Live Demo:** [https://optivault-production.up.railway.app](https://optivault-production.up.railway.app)
+**Live Demo:** [https://optivault-warehouse.vercel.app/](https://optivault-warehouse.vercel.app/)
 
 ---
 
