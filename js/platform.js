@@ -17,15 +17,40 @@
 let consoleView = 'requests';
 
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', async function(){
 
   if(!document.getElementById('requestQueue')) return;
 
   guardConsole();
-  renderConsole();
   initConsoleNav();
   initSignOut();
+  await syncCompaniesFromBackend();
+  renderConsole();
 });
+
+async function syncCompaniesFromBackend(){
+  try {
+    const listUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/admin/companies') : '/api/admin/companies';
+    const res = await fetch(listUrl);
+    const data = await res.json();
+    if(data.success && Array.isArray(data.companies)){
+      const freshList = data.companies.map(c => ({
+        id: c._id,
+        name: c.name,
+        email: c.email,
+        contact: c.contact,
+        requestedWarehouses: c.requestedWarehouses,
+        status: c.status,
+        reference: c.reference,
+        warehouses: c.warehouses || []
+      }));
+      saveCompanyAccounts(freshList);
+      renderConsole();
+    }
+  } catch(err) {
+    console.warn('Could not sync companies from backend:', err);
+  }
+}
 
 
 /* Only the platform admin belongs here. */
@@ -265,15 +290,53 @@ function renderCompanyQueue(){
     </div>`).join('');
 
   host.querySelectorAll('[data-approve-company]').forEach(button => {
-    button.addEventListener('click', function(){
-      decideCompany(button.dataset.approveCompany, 'approved');
+    button.addEventListener('click', async function(){
+      const email = button.dataset.approveCompany;
+      button.disabled = true;
+      button.textContent = 'Approving & Sending Email…';
+
+      try {
+        const decideUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/admin/companies/decide') : '/api/admin/companies/decide';
+        const res = await fetch(decideUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, decision: 'approved' })
+        });
+        const data = await res.json();
+        if(data.previewUrl) {
+          console.log('[OptiVault SMTP Email Preview]', data.previewUrl);
+        }
+      } catch(err) {
+        console.warn('Backend decide API error, using local fallback:', err);
+      }
+
+      decideCompany(email, 'approved');
       renderConsole();
     });
   });
 
   host.querySelectorAll('[data-reject-company]').forEach(button => {
-    button.addEventListener('click', function(){
-      decideCompany(button.dataset.rejectCompany, 'rejected');
+    button.addEventListener('click', async function(){
+      const email = button.dataset.rejectCompany;
+      button.disabled = true;
+      button.textContent = 'Declining & Sending Email…';
+
+      try {
+        const decideUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/admin/companies/decide') : '/api/admin/companies/decide';
+        const res = await fetch(decideUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, decision: 'rejected' })
+        });
+        const data = await res.json();
+        if(data.previewUrl) {
+          console.log('[OptiVault SMTP Email Preview]', data.previewUrl);
+        }
+      } catch(err) {
+        console.warn('Backend decide API error, using local fallback:', err);
+      }
+
+      decideCompany(email, 'rejected');
       renderConsole();
     });
   });
