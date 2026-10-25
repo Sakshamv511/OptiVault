@@ -11,16 +11,33 @@
 
 let chosenWarehouse = null;
 let wrongAttempts = 0;
+let currentCompany = 'Demo company';
 
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', async function(){
 
   // this file only runs on the picker page
   if(!document.getElementById('siteGrid')) return;
 
   showSignedInAs();
+  if(typeof syncWarehousesForCompany === 'function'){
+    try{
+      await syncWarehousesForCompany(currentCompany);
+    }catch(err){
+      console.warn('Could not sync company warehouses from cloud:', err);
+    }
+  }
   renderSites();
   initPasscodeModal();
+
+  // Asynchronously sync all sites from MongoDB Atlas Cloud
+  if(typeof syncFromCloud === 'function'){
+    const sites = typeof warehousesForCompany === 'function'
+      ? warehousesForCompany(currentCompany)
+      : WAREHOUSE_DIRECTORY.filter(entry => entry.company === currentCompany);
+    await Promise.all(sites.map(s => syncFromCloud(s.id)));
+    renderSites();
+  }
 });
 
 
@@ -41,6 +58,7 @@ function showSignedInAs(){
   const avatar = document.getElementById('whoAmI');
 
   if(session && session.company){
+    currentCompany = session.company;
     if(label) label.textContent = session.company;
     if(avatar){
       avatar.textContent = initialsOf(session.company);
@@ -48,6 +66,7 @@ function showSignedInAs(){
     }
     if(banner) banner.hidden = true;
   }else{
+    currentCompany = 'Demo company';
     if(label) label.textContent = 'Demo company';
     if(avatar) avatar.textContent = '—';
     if(banner) banner.hidden = false;
@@ -63,15 +82,32 @@ function showSignedInAs(){
 
 
 /* ---------------------------------------------------------------
-   The three site cards.
-   Stats are read from each warehouse's own slot map, so the numbers
-   on the cards are the same ones the floor page will show.
+   Site cards for the signed-in company.
+   Newly registered companies only see their own approved sites.
    --------------------------------------------------------------- */
 function renderSites(){
   const host = document.getElementById('siteGrid');
   if(!host) return;
 
-  host.innerHTML = WAREHOUSE_DIRECTORY.map(site => {
+  const sites = typeof warehousesForCompany === 'function'
+    ? warehousesForCompany(currentCompany)
+    : WAREHOUSE_DIRECTORY.filter(entry => entry.company === currentCompany);
+
+  // Update dynamic header badge with the actual count of sites online
+  const badge = document.getElementById('sitesOnlineBadge') || document.querySelector('.hright .live');
+  if(badge){
+    badge.textContent = `● ${sites.length} SITE${sites.length === 1 ? '' : 'S'} ONLINE`;
+  }
+
+  if(sites.length === 0){
+    host.innerHTML = `<div class="empty-state" style="grid-column:1/-1; text-align:center; padding:54px 24px; background:#fff; border:1px dashed #d5cec5; border-radius:8px;">
+        <h3 style="margin-bottom:8px; font-size:18px;">No warehouses assigned yet</h3>
+        <p style="color:#666; font-size:14px; margin:0;">Your company administrator has not opened any warehouses yet. Once an addition request is approved by the platform administration team, it will appear here.</p>
+      </div>`;
+    return;
+  }
+
+  host.innerHTML = sites.map(site => {
     const warehouse = loadWarehouse(site.id);
     const stats = warehouseStats(warehouse);
 
