@@ -40,7 +40,8 @@ let WAREHOUSE_DIRECTORY = [
     city:'Mohali',
     address:'Industrial Area Phase 8, Mohali',
     passcode:'4021',
-    note:'Main hub · fast-moving retail stock'
+    note:'Main hub · fast-moving retail stock',
+    company:'Harbor & Bell Logistics'
   },
   {
     id:'WH-CHD',
@@ -48,7 +49,8 @@ let WAREHOUSE_DIRECTORY = [
     city:'Chandigarh',
     address:'Industrial Area Phase 1, Chandigarh',
     passcode:'5530',
-    note:'City depot · mixed inventory'
+    note:'City depot · mixed inventory',
+    company:'Harbor & Bell Logistics'
   },
   {
     id:'WH-PAT',
@@ -56,12 +58,83 @@ let WAREHOUSE_DIRECTORY = [
     city:'Patiala',
     address:'Rajpura Road, Patiala',
     passcode:'6174',
-    note:'Overflow store · bulk and slow movers'
+    note:'Overflow store · bulk and slow movers',
+    company:'Harbor & Bell Logistics'
   }
 ];
 
 function warehouseInfo(id){
-  return WAREHOUSE_DIRECTORY.find(entry => entry.id === id) || null;
+  let found = WAREHOUSE_DIRECTORY.find(entry => entry.id === id);
+  if(!found && typeof loadApprovedSites === 'function'){
+    const approved = loadApprovedSites();
+    found = approved.find(entry => entry.id === id) || null;
+    if(found && !WAREHOUSE_DIRECTORY.some(e => e.id === id)){
+      WAREHOUSE_DIRECTORY.push(found);
+    }
+  }
+  return found || null;
+}
+
+function warehousesForCompany(companyName){
+  if(!companyName || companyName === 'Demo company' || companyName === 'Harbor & Bell Logistics'){
+    return WAREHOUSE_DIRECTORY.filter(entry => !entry.company || entry.company === 'Harbor & Bell Logistics');
+  }
+  return WAREHOUSE_DIRECTORY.filter(entry => entry.company === companyName);
+}
+
+// Fetch all approved/generated warehouses for this company live from MongoDB Atlas
+async function syncWarehousesForCompany(companyName){
+  if(!companyName || companyName === 'Demo company') return;
+  try{
+    const url = typeof getApiUrl === 'function' 
+      ? getApiUrl('/api/warehouse/company/' + encodeURIComponent(companyName))
+      : '/api/warehouse/company/' + encodeURIComponent(companyName);
+    const res = await fetch(url);
+    if(res.ok){
+      const data = await res.json();
+      if(data && data.success && Array.isArray(data.warehouses)){
+        const approved = typeof loadApprovedSites === 'function' ? loadApprovedSites() : [];
+        data.warehouses.forEach(w => {
+          const existing = WAREHOUSE_DIRECTORY.find(entry => entry.id === w.id);
+          if(existing){
+            existing.name = w.name;
+            if(w.city) existing.city = w.city;
+            if(w.passcode) existing.passcode = w.passcode;
+          } else {
+            WAREHOUSE_DIRECTORY.push({
+              id: w.id,
+              name: w.name,
+              city: w.city || 'Central Hub',
+              address: w.city || 'Industrial Area',
+              passcode: w.passcode || '1101',
+              note: `${companyName} site`,
+              company: companyName
+            });
+          }
+
+          const appIdx = approved.findIndex(entry => entry.id === w.id);
+          if(appIdx >= 0){
+            approved[appIdx].name = w.name;
+            if(w.city) approved[appIdx].city = w.city;
+            if(w.passcode) approved[appIdx].passcode = w.passcode;
+          } else {
+            approved.push({
+              id: w.id,
+              name: w.name,
+              city: w.city || 'Central Hub',
+              address: w.city || 'Industrial Area',
+              passcode: w.passcode || '1101',
+              note: `${companyName} site`,
+              company: companyName
+            });
+          }
+        });
+        if(typeof saveApprovedSites === 'function'){
+          saveApprovedSites(approved);
+        }
+      }
+    }
+  }catch(e){}
 }
 
 /* Rack layouts differ per site, which is why the three warehouses
@@ -113,7 +186,15 @@ function saveApprovedSites(list){
 }
 
 function mergeApprovedSites(){
-  loadApprovedSites().forEach(site => {
+  const companies = typeof loadCompanyAccounts === 'function' ? loadCompanyAccounts() : [];
+  const validCompanies = new Set(companies.map(c => c.name));
+  validCompanies.add('Harbor & Bell Logistics');
+  validCompanies.add('Demo company');
+
+  const approved = loadApprovedSites().filter(site => validCompanies.has(site.company));
+  saveApprovedSites(approved);
+
+  approved.forEach(site => {
     const known = WAREHOUSE_DIRECTORY.some(entry => entry.id === site.id);
     if(!known){
       WAREHOUSE_DIRECTORY.push({
@@ -126,6 +207,8 @@ function mergeApprovedSites(){
         company: site.company,
         openedAt: site.openedAt
       });
+    }
+    if(site.rackPlan && site.rackPlan.length){
       RACK_PLANS[site.id] = site.rackPlan;
     }
   });
@@ -162,13 +245,49 @@ function applyRemovedSites(){
 
 applyRemovedSites();
 
+const ZONE_NAMES = [
+  'Fast-pick', 'Outbound stage', 'General store',
+  'Bulk overrun', 'Deep store', 'Reserve cage',
+  'Returns staging', 'Overflow'
+];
+
+/* Racks are sized to the slots the company asked for: eight slots
+   per rack, and each rack sits a little further from the dock. */
+function buildRackPlan(slotsWanted){
+  const num = Number(slotsWanted) || 32;
+  const rackCount = Math.max(2, Math.min(8, Math.round(num / 8)));
+  const plan = [];
+  for(let i = 0; i < rackCount; i++){
+    const letter = String.fromCharCode(65 + i);
+    const deep = i >= rackCount / 2;
+    plan.push({
+      id: letter,
+      name: 'Rack ' + letter,
+      zone: ZONE_NAMES[i % ZONE_NAMES.length],
+      distanceFromDock: i + 1,
+      maxVolume: deep ? 1300 : 800,
+      maxWeight: deep ? 800 : 400
+    });
+  }
+  return plan;
+}
+
 /* Four bays per rack, two levels per bay = 8 slots per rack. */
 const BAYS_PER_RACK = 4;
 const LEVELS_PER_BAY = 2;
 
 function buildEmptyWarehouse(id){
   const info = warehouseInfo(id);
-  const plan = RACK_PLANS[id] || [];
+  let plan = RACK_PLANS[id];
+  if(!plan || !plan.length){
+    if(info && info.rackPlan && info.rackPlan.length){
+      plan = info.rackPlan;
+      RACK_PLANS[id] = plan;
+    }else{
+      plan = buildRackPlan(32);
+      RACK_PLANS[id] = plan;
+    }
+  }
 
   const racks = plan.map(entry => {
     const slots = [];
@@ -176,10 +295,14 @@ function buildEmptyWarehouse(id){
       for(let level = 1; level <= LEVELS_PER_BAY; level++){
         slots.push({
           id: `${entry.id}-${String(bay).padStart(2,'0')}-${level}`,
+          rackId: entry.id,
+          rackName: entry.name,
+          zone: entry.zone,
+          distanceFromDock: entry.distanceFromDock,
           bay: bay,
           level: level,
-          maxVolume: entry.maxVolume,
-          maxWeight: entry.maxWeight,
+          maxVolume: entry.maxVolume || (entry.id >= 'E' ? 1300 : 800),
+          maxWeight: entry.maxWeight || (entry.id >= 'E' ? 800 : 400),
           units: []
         });
       }
@@ -241,10 +364,39 @@ function storageKeyFor(id){
   return FLOOR_KEYS.warehousePrefix + id;
 }
 
+// Synchronize warehouse live with MongoDB Atlas Cloud
+async function syncFromCloud(id){
+  try{
+    const endpoint = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/' + id) : '/api/warehouse/' + id;
+    const res = await fetch(endpoint);
+    if(res.ok){
+      const data = await res.json();
+      if(data && data.success && data.warehouse && data.warehouse.racks && data.warehouse.racks.length){
+        WAREHOUSE = data.warehouse;
+        try{ localStorage.setItem(storageKeyFor(id), JSON.stringify(WAREHOUSE)); }catch(e){}
+        if(typeof renderAll === 'function') renderAll();
+        if(typeof updateHeaderStats === 'function') updateHeaderStats();
+        if(typeof render3D === 'function') render3D();
+        console.log(`[MongoDB Atlas] Live warehouse ${id} loaded from cloud`);
+      }
+    }
+  }catch(err){
+    // Graceful offline fallback
+  }
+}
+
 function loadWarehouse(id){
+  // Trigger background cloud sync from MongoDB Atlas
+  syncFromCloud(id);
+
   try{
     const raw = localStorage.getItem(storageKeyFor(id));
-    if(raw) return JSON.parse(raw);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.racks && Array.isArray(parsed.racks) && parsed.racks.length > 0){
+        return parsed;
+      }
+    }
   }catch(err){
     console.warn('Could not read the warehouse map:', err);
   }
@@ -264,6 +416,24 @@ function saveWarehouse(warehouse){
   }catch(err){
     console.warn('Could not save the warehouse map:', err);
   }
+
+  // Persist floor state directly to MongoDB Atlas
+  try{
+    const syncUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/sync') : '/api/warehouse/sync';
+    const session = (function(){ try { return JSON.parse(localStorage.getItem(FLOOR_KEYS.session)); } catch(e){ return null; } })();
+    const whMeta = typeof warehouseInfo === 'function' ? warehouseInfo(warehouse.id) : null;
+    const currentCompany = (session && session.company) || (whMeta && whMeta.company) || '';
+
+    fetch(syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        warehouseId: warehouse.id,
+        companyName: currentCompany,
+        racks: warehouse.racks
+      })
+    }).catch(err => console.warn('[MongoDB Sync Note]', err.message));
+  }catch(e){}
 }
 
 function addLog(warehouse, text){
@@ -289,15 +459,17 @@ function usedWeight(slot){
 }
 
 function freeVolume(slot){
-  return slot.maxVolume - usedVolume(slot);
+  return (slot.maxVolume || 900) - usedVolume(slot);
 }
 
 function slotFill(slot){
-  return Math.round((usedVolume(slot) / slot.maxVolume) * 100);
+  const max = slot.maxVolume || 900;
+  return max ? Math.round((usedVolume(slot) / max) * 100) : 0;
 }
 
 function rackFill(rack){
-  const capacity = rack.slots.reduce((total, slot) => total + slot.maxVolume, 0);
+  if(!rack || !rack.slots) return 0;
+  const capacity = rack.slots.reduce((total, slot) => total + (slot.maxVolume || 900), 0);
   const filled = rack.slots.reduce((total, slot) => total + usedVolume(slot), 0);
   return capacity ? Math.round((filled / capacity) * 100) : 0;
 }
@@ -594,6 +766,21 @@ function removeStock(warehouse, slotId, sku, quantity){
   target.slot.units = target.slot.units.filter(unit => !removingRefs.includes(unit.ref));
   addLog(warehouse, `Removed ${count} × ${wanted} from ${target.slot.id}.`);
 
+  // Persist stock removal to MongoDB Atlas
+  try{
+    const removeUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/remove') : '/api/warehouse/remove';
+    fetch(removeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        warehouseId: warehouse.id,
+        slotId: target.slot.id,
+        sku: wanted,
+        quantity: count
+      })
+    }).catch(() => {});
+  }catch(e){}
+
   const moved = runReallocation(warehouse);
   saveWarehouse(warehouse);
 
@@ -724,7 +911,19 @@ function buildSuggestions(warehouse){
 function loadRequests(){
   try{
     const raw = localStorage.getItem(FLOOR_KEYS.requests);
-    if(raw) return JSON.parse(raw);
+    if(raw) {
+      const list = JSON.parse(raw);
+      if(Array.isArray(list)){
+        const companies = typeof loadCompanyAccounts === 'function' ? loadCompanyAccounts() : [];
+        if(companies.length){
+          const validCompanies = new Set(companies.map(c => c.name));
+          validCompanies.add('Harbor & Bell Logistics');
+          validCompanies.add('Demo company');
+          return list.filter(r => validCompanies.has(r.company));
+        }
+        return list;
+      }
+    }
   }catch(err){
     console.warn('Could not read warehouse requests:', err);
   }
@@ -790,12 +989,6 @@ function decideRequest(ref, decision){
    supervisors see a new site to unlock.
    --------------------------------------------------------------- */
 
-const ZONE_NAMES = [
-  'Fast-pick', 'Outbound stage', 'General store',
-  'Bulk overrun', 'Deep store', 'Reserve cage',
-  'Returns staging', 'Overflow'
-];
-
 function makeSiteId(city){
   const base = 'WH-' + city.replace(/[^a-z]/gi,'').slice(0,3).toUpperCase();
   let candidate = base;
@@ -809,26 +1002,6 @@ function makeSiteId(city){
 
 function makePasscode(){
   return String(Math.floor(1000 + Math.random() * 9000));
-}
-
-/* Racks are sized to the slots the company asked for: eight slots
-   per rack, and each rack sits a little further from the dock. */
-function buildRackPlan(slotsWanted){
-  const rackCount = Math.max(2, Math.min(8, Math.round(slotsWanted / 8)));
-  const plan = [];
-  for(let i = 0; i < rackCount; i++){
-    const letter = String.fromCharCode(65 + i);
-    const deep = i >= rackCount / 2;
-    plan.push({
-      id: letter,
-      name: 'Rack ' + letter,
-      zone: ZONE_NAMES[i % ZONE_NAMES.length],
-      distanceFromDock: i + 1,
-      maxVolume: deep ? 1300 : 800,
-      maxWeight: deep ? 800 : 400
-    });
-  }
-  return plan;
 }
 
 function approveWarehouseRequest(ref){
@@ -974,13 +1147,14 @@ let activeFilter = 'all';
 let searchTerm = '';
 let activePane = 'floor';
 let LAST_REPORT = null;     // the last allocation or reallocation run
+let LAST_PLACED_SLOTS = []; // slot IDs that received stock in the last allocation
 
 function renderAll(){
   renderHeader();
   renderStats();
   renderRacks();
   renderZones();
-  // renderMiniViz();  // mini 3D preview disabled — "Coming soon"
+  renderMiniViz();
   renderSuggestions();
   renderPending();
   renderActivity();
@@ -1042,9 +1216,9 @@ function renderRacks(){
   let racks = WAREHOUSE.racks.slice();
 
   if(activeFilter === 'near-full'){
-    racks = racks.filter(rack => rackFill(rack) >= 85);
+    racks = racks.filter(rack => rackFill(rack) >= 85 || rack.slots.some(slot => slotFill(slot) >= 85));
   }else if(activeFilter === 'has-space'){
-    racks = racks.filter(rack => rackFill(rack) < 40);
+    racks = racks.filter(rack => rackFill(rack) < 40 || rack.slots.some(slot => slotFill(slot) < 40));
   }
 
   if(searchTerm){
@@ -1067,15 +1241,38 @@ function renderRacks(){
   }
 
   host.innerHTML = racks.map(rack => {
-    const fill = rackFill(rack);
+    const rackId = rack.id || (rack.slots && rack.slots[0] ? rack.slots[0].id.split('-')[0] : 'A');
+    const rackName = rack.name || ('Rack ' + rackId);
+    const rackZone = rack.zone || 'General store';
+    const fill = isNaN(rackFill(rack)) ? 0 : rackFill(rack);
     const open = rack.slots.filter(slot => slot.units.length === 0).length;
+
+    let visibleSlots = rack.slots;
+    if(activeFilter === 'near-full'){
+      visibleSlots = rack.slots.filter(slot => slotFill(slot) >= 85);
+    }else if(activeFilter === 'has-space'){
+      visibleSlots = rack.slots.filter(slot => slotFill(slot) < 40);
+    }
+
+    if(searchTerm){
+      visibleSlots = visibleSlots.filter(slot =>
+        rack.name.toLowerCase().includes(searchTerm) ||
+        rack.zone.toLowerCase().includes(searchTerm) ||
+        slot.id.toLowerCase().includes(searchTerm) ||
+        slot.units.some(unit =>
+          (unit.sku || '').toLowerCase().includes(searchTerm) ||
+          (unit.name || '').toLowerCase().includes(searchTerm)
+        )
+      );
+    }
+
     return `
       <div class="rack">
         <div class="rack-head">
-          <span class="tagpill">${rack.id}</span>
+          <span class="tagpill">${rackId}</span>
           <div>
-            <h3>${rack.name}</h3>
-            <div class="desc">${rack.zone} · ${rack.slots.length} slots · ${open} empty · ${dockLabel(rack.distanceFromDock)}</div>
+            <h3>${rackName}</h3>
+            <div class="desc">${rackZone} · ${visibleSlots.length} of ${rack.slots.length} slots · ${open} empty · ${dockLabel(rack.distanceFromDock || 1)}</div>
           </div>
           <div class="bar-wrap">
             <div class="bar"><i class="${fillClass(fill)}" style="width:${fill}%"></i></div>
@@ -1083,7 +1280,7 @@ function renderRacks(){
           </div>
         </div>
         <div class="slots">
-          ${rack.slots.map(slot => renderSlotRow(slot)).join('')}
+          ${visibleSlots.map(slot => renderSlotRow(slot)).join('')}
         </div>
       </div>`;
   }).join('');
@@ -1097,7 +1294,9 @@ function dockLabel(distance){
 }
 
 function renderSlotRow(slot){
-  const fill = slotFill(slot);
+  const fill = isNaN(slotFill(slot)) ? 0 : slotFill(slot);
+  const maxWeight = slot.maxWeight || 450;
+  const isRecentlyPlaced = LAST_PLACED_SLOTS.includes(slot.id);
   const groups = {};
 
   slot.units.forEach(unit => {
@@ -1111,15 +1310,16 @@ function renderSlotRow(slot){
   const contents = keys.length
     ? keys.map(sku => {
         const group = groups[sku];
-        return `${sku} × ${group.count}${group.fragile ? ' <b class="flag">FRAGILE</b>' : ''}`;
+        const isTargetSku = LAST_REPORT && LAST_REPORT.sku === sku;
+        return `${sku} × ${group.count}${group.fragile ? ' <b class="flag">FRAGILE</b>' : ''}${isTargetSku && isRecentlyPlaced ? ' <b style="color:#10b981; font-weight:700; font-size:9px; background:#dcfce7; padding:1px 5px; border-radius:3px; margin-left:3px;">+ADDED</b>' : ''}`;
       }).join(' · ')
     : '<span class="muted-text">Empty · ready for putaway</span>';
 
   return `
-    <div class="slot">
+    <div class="slot ${isRecentlyPlaced ? 'just-updated' : ''}" data-slot-id="${slot.id}">
       <span class="id">${slot.id}</span>
       <span class="desc">${contents}</span>
-      <span class="kg">${Math.round(usedWeight(slot))}/${slot.maxWeight} kg</span>
+      <span class="kg">${Math.round(usedWeight(slot))}/${maxWeight} kg</span>
       <div class="sbar"><i class="${fillClass(fill)}" style="width:${fill}%"></i></div>
       <span class="pct-sm">${fill}%</span>
     </div>`;
@@ -1321,13 +1521,14 @@ function addReportHtml(report){
       ${reasons.slice(0, 6).map(text => `<li>${text}</li>`).join('')}
     </ul>` : '';
 
+  const firstSlot = placed && placed[0] ? placed[0].slotId : '';
   return `
     <div class="rep-head">
       <div>
         <h4>Allocation run — ${report.sku}</h4>
         <div class="rep-meta">${report.qty} unit${report.qty > 1 ? 's' : ''} sorted largest first, then each one took the best-ranked slot that would accept it.</div>
       </div>
-      <button class="btn" type="button" data-goto-pane="floor">See it on the floor</button>
+      <button class="btn" type="button" onclick="goToFloorAndHighlight('${firstSlot}')">See it on the floor</button>
     </div>
 
     <div class="rep-chips">
@@ -1413,7 +1614,13 @@ function render3D(){
   const stage = document.getElementById('stage3d');
   if(!stage) return;
 
-  const dock = '<div class="dock-strip"><span>DOCK DOORS</span></div>';
+  if(!WAREHOUSE || !WAREHOUSE.racks){
+    const id = activeWarehouseId() || 'WH-MOH';
+    WAREHOUSE = loadWarehouse(id);
+  }
+  if(!WAREHOUSE || !WAREHOUSE.racks) return;
+
+  const dock = '<div class="dock-strip" title="Dock Inbound Doors"><span>DOCK DOORS · INBOUND</span></div>';
 
   stage.innerHTML = dock + WAREHOUSE.racks
     .slice()
@@ -1431,16 +1638,21 @@ function render3D(){
           .sort((a, b) => a.level - b.level)
           .map(slot => {
             const fill = slotFill(slot);
-            // 4px of plinth so an almost-empty slot is still visible,
+            // 5px of plinth so an almost-empty slot is visible,
             // then up to 34px more as the slot fills.
-            const height = fill === 0 ? 0 : Math.round(4 + (fill / 100) * 34);
+            const height = fill === 0 ? 0 : Math.round(5 + (fill / 100) * 32);
             return `
               <div class="box3 ${fill === 0 ? 'vacant' : fillClass(fill)}"
                    style="--h:${height}px"
+                   data-slot="${slot.id}"
+                   data-rack="${rack.id}"
+                   data-fill="${fill}"
                    title="${slot.id} — ${fill}% full">
-                <div class="floorpad"></div>
+                <div class="floorpad"><span class="slot-mini-label">${slot.id}</span></div>
                 <div class="wall-s"></div>
                 <div class="wall-e"></div>
+                <div class="wall-n"></div>
+                <div class="wall-w"></div>
                 <div class="top"></div>
               </div>`;
           }).join('');
@@ -1448,12 +1660,146 @@ function render3D(){
       }).join('');
 
       return `
-        <div class="rack3d">
+        <div class="rack3d" data-rack="${rack.id}">
+          <div class="rack-header-3d">
+            <span class="rack-title">${rack.id}</span>
+            <span class="rack-zone-badge">${rack.zone}</span>
+          </div>
           <div class="bays">${bayHtml}</div>
         </div>`;
     }).join('');
 
   renderRackKey();
+  init3DTooltip();
+}
+
+/* Floating interactive telemetry tooltip on hovering 3D boxes */
+function init3DTooltip(){
+  let tooltip = document.getElementById('spatial3dTooltip');
+  if(!tooltip){
+    tooltip = document.createElement('div');
+    tooltip.id = 'spatial3dTooltip';
+    tooltip.className = 'spatial-3d-tooltip';
+    document.body.appendChild(tooltip);
+  }
+
+  const stage = document.getElementById('stage3d');
+  if(!stage || stage.dataset.tooltipBound) return;
+  stage.dataset.tooltipBound = 'true';
+
+  let currentSlot = null;
+
+  stage.addEventListener('mousemove', function(e){
+    const box = e.target.closest('.box3');
+    if(!box){
+      currentSlot = null;
+      tooltip.classList.remove('visible');
+      return;
+    }
+
+    const slotId = box.getAttribute('data-slot');
+    if(!slotId || !WAREHOUSE){
+      tooltip.classList.remove('visible');
+      return;
+    }
+
+    // Also update telemetry card if on warehouse-3d.html
+    if(typeof window.populateCard === 'function'){
+      window.populateCard(slotId);
+    }
+
+    if(currentSlot !== slotId){
+      currentSlot = slotId;
+      const entry = findSlotById(WAREHOUSE, slotId);
+      if(!entry){
+        tooltip.classList.remove('visible');
+        return;
+      }
+
+      const slot = entry.slot;
+      const rack = entry.rack;
+      const fill = isNaN(slotFill(slot)) ? 0 : slotFill(slot);
+      const usedKg = Math.round(usedWeight(slot));
+      const maxKg = slot.maxWeight || 400;
+      const usedVol = Math.round(usedVolume(slot));
+      const maxVol = slot.maxVolume || 800;
+      const wtPercent = Math.min(100, Math.round((usedKg / maxKg) * 100));
+
+      // Group units by SKU
+      const groups = {};
+      (slot.units || []).forEach(unit => {
+        if(!groups[unit.sku]){
+          groups[unit.sku] = { count: 0, name: unit.name || unit.sku, weight: unit.weight || 0, fragile: unit.fragile };
+        }
+        groups[unit.sku].count++;
+      });
+
+      const skuKeys = Object.keys(groups);
+      let contentsHtml = '';
+      if(skuKeys.length === 0){
+        contentsHtml = '<div class="tip-empty">● Position is empty & ready for inbound stock.</div>';
+      } else {
+        contentsHtml = skuKeys.map(sku => {
+          const item = groups[sku];
+          return `<div class="tip-item">
+            <b>${sku}</b>
+            <span>${item.count} unit${item.count > 1 ? 's' : ''} (${Math.round(item.weight * item.count)} kg)${item.fragile ? ' <span class="tip-flag">FRAGILE</span>' : ''}</span>
+          </div>`;
+        }).join('');
+      }
+
+      const fillBadgeClass = fill >= 85 ? 'bad' : fill >= 40 ? 'mid' : 'good';
+      const statusText = fill === 0 ? 'VACANT' : fill >= 85 ? `${fill}% CONGESTED` : `${fill}% OCCUPIED`;
+
+      tooltip.innerHTML = `
+        <div class="tip-head">
+          <span class="tip-id">${slot.id}</span>
+          <span class="tip-badge ${fillBadgeClass}">${statusText}</span>
+        </div>
+        <div class="tip-meta">
+          ${rack.name || ('Rack ' + rack.id)} · Bay ${slot.bay} · Level ${slot.level}
+          <span class="tip-zone">(${rack.zone || 'General'})</span>
+        </div>
+        <div class="tip-bars">
+          <div class="tip-bar-row">
+            <span>Vol: ${usedVol} / ${maxVol} L</span>
+            <b>${fill}%</b>
+          </div>
+          <div class="tip-bar"><i class="${fillBadgeClass}" style="width:${fill}%"></i></div>
+          <div class="tip-bar-row" style="margin-top:5px;">
+            <span>Weight: ${usedKg} / ${maxKg} kg</span>
+            <b>${wtPercent}%</b>
+          </div>
+          <div class="tip-bar"><i class="${wtPercent >= 85 ? 'bad' : wtPercent >= 40 ? 'mid' : 'good'}" style="width:${wtPercent}%"></i></div>
+        </div>
+        <div class="tip-contents">
+          ${contentsHtml}
+        </div>
+      `;
+    }
+
+    // Position tooltip near cursor, clamping within screen
+    const tipWidth = 270;
+    const tipHeight = tooltip.offsetHeight || 160;
+    let left = e.clientX + 16;
+    let top = e.clientY + 16;
+
+    if(left + tipWidth > window.innerWidth - 12){
+      left = e.clientX - tipWidth - 16;
+    }
+    if(top + tipHeight > window.innerHeight - 12){
+      top = e.clientY - tipHeight - 16;
+    }
+
+    tooltip.style.left = Math.max(10, left) + 'px';
+    tooltip.style.top = Math.max(10, top) + 'px';
+    tooltip.classList.add('visible');
+  });
+
+  stage.addEventListener('mouseleave', function(){
+    currentSlot = null;
+    tooltip.classList.remove('visible');
+  });
 }
 
 /* The key under the 3D scene: readable text outside the rotation. */
@@ -1482,11 +1828,18 @@ function renderRackKey(){
    8. EVENTS
    ===================================================================== */
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', async function(){
   // floor.js is also loaded by the warehouse picker and the company
   // dashboard, neither of which has a rack list. Nothing below applies
   // on those pages.
   if(!document.getElementById('racks')) return;
+
+  const session = (function(){ try { return JSON.parse(localStorage.getItem(FLOOR_KEYS.session)); } catch(e){ return null; } })();
+  if(session && session.company && typeof syncWarehousesForCompany === 'function'){
+    try {
+      await syncWarehousesForCompany(session.company);
+    } catch(e){}
+  }
 
   if(!guardWarehouseAccess()) return;
   guardSession();
@@ -1500,6 +1853,7 @@ document.addEventListener('DOMContentLoaded', function(){
   initFilters();
   initSearch();
   initModals();
+  initSlotInspector();
   initReset();
   initChangeWarehouse();
 });
@@ -1606,16 +1960,17 @@ function initAddForm(){
   form.addEventListener('submit', function(event){
     event.preventDefault();
 
+    const rawSku = value('inSku');
     const entry = {
-      sku: value('inSku').toUpperCase(),
+      sku: (rawSku || ('SKU-' + Math.floor(10000 + Math.random() * 90000))).toUpperCase(),
       name: value('inName') || 'Unnamed stock',
-      l: Number(value('inL')),
-      w: Number(value('inW')),
-      h: Number(value('inH')),
-      weight: Number(value('inWeight')),
-      velocity: value('inVelocity'),
-      fragile: document.getElementById('inFragile').checked,
-      qty: Number(value('inQty'))
+      l: Number(value('inL') || 60),
+      w: Number(value('inW') || 40),
+      h: Number(value('inH') || 35),
+      weight: Number(value('inWeight') || 14),
+      velocity: value('inVelocity') || 'medium',
+      fragile: document.getElementById('inFragile') ? document.getElementById('inFragile').checked : false,
+      qty: Math.max(1, Math.min(40, Number(value('inQty') || 1)))
     };
 
     const problem = validateEntry(entry);
@@ -1625,6 +1980,35 @@ function initAddForm(){
     }
 
     const result = addStock(WAREHOUSE, entry);
+    LAST_PLACED_SLOTS = result.placed.map(item => item.slotId);
+
+    // Sync allocation with backend Express API: POST /api/warehouse/allocate
+    try {
+      const allocateUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/allocate') : '/api/warehouse/allocate';
+      const session = (function(){ try { return JSON.parse(localStorage.getItem(FLOOR_KEYS.session)); } catch(e){ return null; } })();
+      const currentWh = (typeof activeWarehouseId === 'function' ? activeWarehouseId() : 'WH-MOH') || 'WH-MOH';
+      const whMeta = typeof warehouseInfo === 'function' ? warehouseInfo(currentWh) : null;
+      const currentCompany = (session && session.company) || (whMeta && whMeta.company) || '';
+
+      fetch(allocateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warehouseId: currentWh,
+          companyName: currentCompany,
+          item: entry
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if(data && data.success){
+          console.log(`[Backend Sync] Stored allocation ${data.allocationRef} in MongoDB Atlas`);
+        }
+      })
+      .catch(err => console.warn('[Backend Note] Local offline fallback active:', err.message));
+    } catch(fetchErr) {
+      // Graceful offline fallback
+    }
 
     LAST_REPORT = {
       kind: 'add',
@@ -1642,10 +2026,15 @@ function initAddForm(){
       ? groupPlacements(result.placed)
       : '';
 
+    const firstSlot = result.placed[0]?.slotId || '';
+    const viewBtn = firstSlot
+      ? `<button type="button" class="btn" style="padding:3px 10px; font-size:11px; margin-left:8px; cursor:pointer;" onclick="goToFloorAndHighlight('${firstSlot}')">View on Floor →</button>`
+      : '';
+
     if(result.rejected.length === 0){
       showResult('good',
         `Placed ${result.placed.length} × ${entry.sku}`,
-        placedText);
+        placedText + (viewBtn ? ' &nbsp;·&nbsp; ' + viewBtn : ''));
     }else if(result.placed.length === 0){
       showResult('bad',
         `Could not place ${entry.sku}`,
@@ -1653,11 +2042,15 @@ function initAddForm(){
     }else{
       showResult('warn',
         `Placed ${result.placed.length}, ${result.rejected.length} waiting`,
-        placedText + ' · ' + result.rejected[0].reason);
+        placedText + ' · ' + result.rejected[0].reason + (viewBtn ? ' &nbsp;·&nbsp; ' + viewBtn : ''));
     }
 
     form.reset();
-    document.getElementById('inQty').value = 1;
+    if(document.getElementById('inL')) document.getElementById('inL').value = 60;
+    if(document.getElementById('inW')) document.getElementById('inW').value = 40;
+    if(document.getElementById('inH')) document.getElementById('inH').value = 35;
+    if(document.getElementById('inWeight')) document.getElementById('inWeight').value = 14;
+    if(document.getElementById('inQty')) document.getElementById('inQty').value = 1;
   });
 }
 
@@ -1705,6 +2098,8 @@ function initRemoveForm(){
       return;
     }
 
+    LAST_PLACED_SLOTS = [];
+
     LAST_REPORT = {
       kind: 'remove',
       sku: result.sku,
@@ -1719,16 +2114,44 @@ function initRemoveForm(){
 
     renderAll();
 
+    const viewBtn = `<button type="button" class="btn" style="padding:3px 10px; font-size:11px; margin-left:8px; cursor:pointer;" onclick="goToFloorAndHighlight('${result.slotId}')">View on Floor →</button>`;
+
     showResult('good',
       `Removed ${result.removed} × ${result.sku} from ${result.slotId}`,
-      result.reallocated
+      (result.reallocated
         ? `Reallocation placed ${result.reallocated} waiting unit${result.reallocated > 1 ? 's' : ''}.`
-        : 'No units were waiting for that space.');
+        : 'No units were waiting for that space.') + ' &nbsp;·&nbsp; ' + viewBtn);
 
     form.reset();
     document.getElementById('outQty').value = 1;
   });
 }
+
+function goToFloorAndHighlight(slotId){
+  searchTerm = '';
+  activeFilter = 'all';
+  const field = document.getElementById('floorSearch');
+  if(field) field.value = '';
+  document.querySelectorAll('[data-filter]').forEach(tab => {
+    tab.classList.toggle('on', tab.dataset.filter === 'all');
+  });
+
+  showPane('floor');
+  renderRacks();
+
+  if(slotId){
+    window.setTimeout(function(){
+      const el = document.querySelector(`[data-slot-id="${slotId}"]`);
+      if(el){
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('just-updated');
+        void el.offsetWidth;
+        el.classList.add('just-updated');
+      }
+    }, 120);
+  }
+}
+window.goToFloorAndHighlight = goToFloorAndHighlight;
 
 function value(id){
   const node = document.getElementById(id);
@@ -1767,32 +2190,36 @@ function initSearch(){
 function initModals(){
   const modal3d = document.getElementById('modal3d');
 
-  // header 'Open 3D view' also disabled — 3D feature is "Coming soon"
-  // ['open3d'].forEach(function(id){
-  //   const button = document.getElementById(id);
-  //   if(button && modal3d){
-  //     button.addEventListener('click', function(){
-  //       render3D();
-  //       modal3d.classList.add('on');
-  //     });
-  //   }
-  // });
+  ['open3d', 'open3dHeader'].forEach(function(id){
+    const button = document.getElementById(id);
+    if(button && modal3d){
+      button.addEventListener('click', function(){
+        render3D();
+        modal3d.classList.add('on');
+      });
+    }
+  });
+
+  init3DRotation();
+
+  function closeModal3D(){
+    document.querySelectorAll('.modal').forEach(modal => modal.classList.remove('on'));
+    if(typeof stopAutoRotate360 === 'function') stopAutoRotate360();
+  }
 
   document.querySelectorAll('[data-close]').forEach(button => {
-    button.addEventListener('click', function(){
-      document.querySelectorAll('.modal').forEach(modal => modal.classList.remove('on'));
-    });
+    button.addEventListener('click', closeModal3D);
   });
 
   document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', function(event){
-      if(event.target === modal) modal.classList.remove('on');
+      if(event.target === modal) closeModal3D();
     });
   });
 
   document.addEventListener('keydown', function(event){
     if(event.key === 'Escape'){
-      document.querySelectorAll('.modal').forEach(modal => modal.classList.remove('on'));
+      closeModal3D();
     }
   });
 
@@ -1805,15 +2232,595 @@ function initModals(){
   }
 }
 
+let stopAutoRotate360 = null;
+
+function init3DRotation(){
+  const stage = document.getElementById('stage3d');
+  const stageWrap = document.getElementById('stageWrap3D') || document.querySelector('.stage-wrap, .v-stage-wrap');
+  const btnAuto = document.getElementById('btnAutoRotate360');
+  const slider = document.getElementById('rot360Slider');
+  const sliderVal = document.getElementById('rot360Val');
+
+  if(!stageWrap || !stage) return;
+
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let rotX = 56, rotZ = 328;
+  let isAutoSpinning = false;
+  let animId = null;
+
+  let zoom = 1.0;
+  const zoomInBtn = document.getElementById('btnZoomIn');
+  const zoomOutBtn = document.getElementById('btnZoomOut');
+  const zoomVal = document.getElementById('zoomLevel');
+
+  function updateTransform(){
+    stage.style.transform = `scale(${zoom}) rotateX(${rotX}deg) rotateZ(${rotZ}deg)`;
+    const norm = Math.round(((rotZ % 360) + 360) % 360);
+    if(slider) slider.value = norm;
+    if(sliderVal) sliderVal.textContent = norm + '°';
+    if(zoomVal) zoomVal.textContent = Math.round(zoom * 100) + '%';
+  }
+
+  function stopSpin(){
+    if(isAutoSpinning){
+      isAutoSpinning = false;
+      if(animId) cancelAnimationFrame(animId);
+      animId = null;
+      stage.classList.remove('no-transition');
+      if(btnAuto){
+        btnAuto.classList.remove('active');
+        btnAuto.innerHTML = '<span class="spin-ico">⟳</span> Auto 360°';
+      }
+    }
+  }
+
+  function startSpin(){
+    if(isAutoSpinning) return;
+    isAutoSpinning = true;
+    stage.classList.add('no-transition');
+    if(btnAuto){
+      btnAuto.classList.add('active');
+      btnAuto.innerHTML = '<span class="spin-ico">⟳</span> Spinning 360°';
+    }
+    function frame(){
+      if(!isAutoSpinning) return;
+      rotZ = (rotZ + 0.35) % 360;
+      updateTransform();
+      animId = requestAnimationFrame(frame);
+    }
+    animId = requestAnimationFrame(frame);
+  }
+
+  stopAutoRotate360 = stopSpin;
+
+  if(btnAuto){
+    btnAuto.addEventListener('click', function(){
+      if(isAutoSpinning){
+        stopSpin();
+      }else{
+        startSpin();
+      }
+    });
+  }
+
+  if(slider){
+    slider.addEventListener('input', function(){
+      stopSpin();
+      stage.classList.add('no-transition');
+      rotZ = Number(slider.value);
+      Object.keys(presetBtns).forEach(other => {
+        const otherBtn = document.getElementById(other);
+        if(otherBtn) otherBtn.classList.remove('active');
+      });
+      updateTransform();
+    });
+    slider.addEventListener('change', function(){
+      stage.classList.remove('no-transition');
+    });
+  }
+
+  const presetBtns = {
+    btnReset3D: { x: 56, z: 328 }, // Isometric 3D angled view
+    btnTop3D:   { x: 0,  z: 0 },   // Top plan view looking straight down from ceiling
+    btnSide3D:  { x: 70, z: 0 },   // Side profile view of the racks
+    btnFront3D: { x: 70, z: 270 }  // Front view facing into the loading dock and aisles
+  };
+
+  Object.keys(presetBtns).forEach(id => {
+    const btn = document.getElementById(id);
+    if(btn){
+      btn.addEventListener('click', function(){
+        stopSpin();
+        stage.classList.remove('no-transition');
+        rotX = presetBtns[id].x;
+        rotZ = presetBtns[id].z;
+        Object.keys(presetBtns).forEach(other => {
+          const otherBtn = document.getElementById(other);
+          if(otherBtn) otherBtn.classList.toggle('active', other === id);
+        });
+        updateTransform();
+      });
+    }
+  });
+
+  if(zoomInBtn){
+    zoomInBtn.addEventListener('click', function(){
+      stage.classList.remove('no-transition');
+      zoom = Math.min(2.4, Math.round((zoom + 0.15) * 100) / 100);
+      updateTransform();
+    });
+  }
+  if(zoomOutBtn){
+    zoomOutBtn.addEventListener('click', function(){
+      stage.classList.remove('no-transition');
+      zoom = Math.max(0.45, Math.round((zoom - 0.15) * 100) / 100);
+      updateTransform();
+    });
+  }
+
+  const zoomResetBtn = document.getElementById('btnZoomReset');
+  if(zoomResetBtn){
+    zoomResetBtn.addEventListener('click', function(){
+      stage.classList.remove('no-transition');
+      zoom = 1.0;
+      rotX = 56;
+      rotZ = 328;
+      updateTransform();
+    });
+  }
+
+  stageWrap.addEventListener('wheel', function(e){
+    e.preventDefault();
+    stage.classList.add('no-transition');
+    if(e.deltaY < 0){
+      zoom = Math.min(2.4, Math.round((zoom + 0.08) * 100) / 100);
+    }else{
+      zoom = Math.max(0.45, Math.round((zoom - 0.08) * 100) / 100);
+    }
+    updateTransform();
+  }, { passive: false });
+
+  stageWrap.style.cursor = 'grab';
+
+  // Mouse Dragging (360° yaw + pitch)
+  stageWrap.addEventListener('mousedown', function(e){
+    if(e.target.closest('.rack-key') || e.target.closest('button') || e.target.closest('input')) return;
+    stopSpin();
+    stage.classList.add('no-transition');
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    stageWrap.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', function(e){
+    if(!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    startX = e.clientX;
+    startY = e.clientY;
+    rotZ = (rotZ + dx * 0.45) % 360;
+    rotX = Math.max(0, Math.min(88, rotX - dy * 0.45));
+    updateTransform();
+  });
+
+  window.addEventListener('mouseup', function(){
+    if(isDragging){
+      isDragging = false;
+      stageWrap.style.cursor = 'grab';
+      stage.classList.remove('no-transition');
+    }
+  });
+
+  // Touch Dragging for mobile / trackpad touch events
+  stageWrap.addEventListener('touchstart', function(e){
+    if(e.touches.length !== 1) return;
+    if(e.target.closest('.rack-key') || e.target.closest('button') || e.target.closest('input')) return;
+    stopSpin();
+    stage.classList.add('no-transition');
+    isDragging = true;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  stageWrap.addEventListener('touchmove', function(e){
+    if(!isDragging || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    rotZ = (rotZ + dx * 0.45) % 360;
+    rotX = Math.max(0, Math.min(88, rotX - dy * 0.45));
+    updateTransform();
+  }, { passive: true });
+
+  stageWrap.addEventListener('touchend', function(){
+    isDragging = false;
+    stage.classList.remove('no-transition');
+  }, { passive: true });
+
+  // Keyboard navigation shortcuts
+  window.addEventListener('keydown', function(e){
+    if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if(e.code === 'Space'){
+      e.preventDefault();
+      if(isAutoSpinning) stopSpin(); else startSpin();
+    }else if(e.key === '1'){
+      const b = document.getElementById('btnReset3D');
+      if(b) b.click();
+    }else if(e.key === '2'){
+      const b = document.getElementById('btnTop3D');
+      if(b) b.click();
+    }else if(e.key === '3'){
+      const b = document.getElementById('btnSide3D');
+      if(b) b.click();
+    }else if(e.key === '4'){
+      const b = document.getElementById('btnFront3D');
+      if(b) b.click();
+    }else if(e.key === '+' || e.key === '='){
+      if(zoomInBtn) zoomInBtn.click();
+    }else if(e.key === '-'){
+      if(zoomOutBtn) zoomOutBtn.click();
+    }else if(e.key.toLowerCase() === 'r'){
+      if(zoomResetBtn) zoomResetBtn.click();
+    }
+  });
+
+  updateTransform();
+}
+
 /* Rebuild the floor from scratch — useful before a demo. */
 function initReset(){
   const button = document.getElementById('resetFloor');
   if(!button) return;
-  button.addEventListener('click', function(){
+  button.addEventListener('click', async function(){
+    try{
+      const resetUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/reset') : '/api/warehouse/reset';
+      await fetch(resetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ warehouseId: WAREHOUSE.id })
+      });
+    }catch(err){
+      console.warn('[MongoDB Atlas Reset Note]', err.message);
+    }
     localStorage.removeItem(storageKeyFor(WAREHOUSE.id));
-    WAREHOUSE = loadWarehouse(activeWarehouseId());
+    await syncFromCloud(activeWarehouseId());
     LAST_REPORT = null;
     renderAll();
-    showResult('good', 'Floor reset to seed stock', 'The warehouse map was rebuilt and re-allocated.');
+    showResult('good', 'Floor reset to seed stock', 'The warehouse map was rebuilt and synchronized with MongoDB Atlas.');
   });
+}
+
+/* =====================================================================
+   INTERACTIVE SLOT INSPECTOR & STOCK RELOCATION
+   ===================================================================== */
+let currentInspectSlotId = null;
+
+function findSlotWithRack(slotId){
+  if(!WAREHOUSE || !WAREHOUSE.racks) return null;
+  for(const rack of WAREHOUSE.racks){
+    const s = rack.slots.find(slot => slot.id === slotId);
+    if(s) return { slot: s, rack };
+  }
+  return null;
+}
+
+function openSlotInspector(slotId){
+  const found = findSlotWithRack(slotId);
+  if(!found) return;
+
+  const { slot, rack } = found;
+  currentInspectSlotId = slot.id;
+
+  const modal = document.getElementById('modalSlotInspector');
+  if(!modal) return;
+
+  // Header Details
+  const inspSlotId = document.getElementById('inspSlotId');
+  const inspRackName = document.getElementById('inspRackName');
+  const inspMeta = document.getElementById('inspMeta');
+
+  if(inspSlotId) inspSlotId.textContent = slot.id;
+  if(inspRackName) inspRackName.textContent = `${rack.name || 'Rack ' + rack.id} · ${rack.zone || 'General'}`;
+  if(inspMeta) inspMeta.textContent = `Distance from dock: ${rack.distanceFromDock || 1} (${dockLabel(rack.distanceFromDock || 1)}) · Level ${slot.level || 1} · Bay ${slot.bay || 1}`;
+
+  // Capacity calculations
+  const volUsed = Math.round(usedVolume(slot));
+  const volMax = slot.maxVolume || 800;
+  const volPct = Math.min(100, Math.round((volUsed / volMax) * 100));
+
+  const wtUsed = Math.round(usedWeight(slot));
+  const wtMax = slot.maxWeight || 400;
+  const wtPct = Math.min(100, Math.round((wtUsed / wtMax) * 100));
+
+  // Meters
+  const inspVolText = document.getElementById('inspVolText');
+  const inspVolBar = document.getElementById('inspVolBar');
+  const inspVolPct = document.getElementById('inspVolPct');
+
+  if(inspVolText) inspVolText.textContent = `${volUsed} / ${volMax} L`;
+  if(inspVolBar){
+    inspVolBar.style.width = volPct + '%';
+    inspVolBar.className = fillClass(volPct);
+  }
+  if(inspVolPct) inspVolPct.textContent = `${volPct}% capacity utilized (${volMax - volUsed} L remaining)`;
+
+  const inspWtText = document.getElementById('inspWtText');
+  const inspWtBar = document.getElementById('inspWtBar');
+  const inspWtPct = document.getElementById('inspWtPct');
+
+  if(inspWtText) inspWtText.textContent = `${wtUsed} / ${wtMax} kg`;
+  if(inspWtBar){
+    inspWtBar.style.width = wtPct + '%';
+    inspWtBar.className = fillClass(wtPct);
+  }
+  if(inspWtPct) inspWtPct.textContent = `${wtPct}% weight load (${wtMax - wtUsed} kg available)`;
+
+  // Status Badge
+  const inspStatusBadge = document.getElementById('inspStatusBadge');
+  const inspStatusDesc = document.getElementById('inspStatusDesc');
+
+  if(inspStatusBadge && inspStatusDesc){
+    if(slot.units.length === 0){
+      inspStatusBadge.textContent = 'VACANT';
+      inspStatusBadge.className = 'insp-badge vacant';
+      inspStatusDesc.textContent = 'Empty slot ready for putaway allocation.';
+    } else if(volPct >= 85 || wtPct >= 85){
+      inspStatusBadge.textContent = 'CONGESTED';
+      inspStatusBadge.className = 'insp-badge congested';
+      inspStatusDesc.textContent = 'Operating near capacity threshold (≥85%).';
+    } else {
+      inspStatusBadge.textContent = 'OCCUPIED';
+      inspStatusBadge.className = 'insp-badge occupied';
+      inspStatusDesc.textContent = 'Nominal operating volume. Free space available.';
+    }
+  }
+
+  // Items List
+  const inspItemList = document.getElementById('inspItemList');
+  const inspUnitCount = document.getElementById('inspUnitCount');
+  if(inspUnitCount) inspUnitCount.textContent = `${slot.units.length} unit(s)`;
+
+  const groups = {};
+  slot.units.forEach(unit => {
+    if(!groups[unit.sku]){
+      groups[unit.sku] = {
+        sku: unit.sku,
+        name: unit.name || 'Stock item',
+        count: 0,
+        volume: unit.volume || 0,
+        weight: unit.weight || 0,
+        velocity: unit.velocity || 'medium',
+        fragile: unit.fragile || false
+      };
+    }
+    groups[unit.sku].count++;
+  });
+
+  const skuKeys = Object.keys(groups);
+  if(inspItemList){
+    if(skuKeys.length === 0){
+      inspItemList.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:11px; background:#fff; border:1px dashed #cbd5e1; border-radius:6px;">Slot is vacant. No inventory items stored.</div>`;
+    } else {
+      inspItemList.innerHTML = skuKeys.map(sku => {
+        const item = groups[sku];
+        return `
+          <div class="insp-item-card">
+            <div class="insp-item-main">
+              <b>${item.sku}</b> — ${item.name}
+              <span>${item.volume} L · ${item.weight} kg per unit · Total: ${(item.volume * item.count).toFixed(1)} L</span>
+            </div>
+            <div class="insp-item-tags">
+              <span class="insp-tag qty">${item.count} in slot</span>
+              <span class="insp-tag vel">${item.velocity}</span>
+              ${item.fragile ? '<span class="insp-tag fragile">🛡️ FRAGILE</span>' : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+  }
+
+  // Populate Transfer Form Dropdowns
+  const skuSelect = document.getElementById('transSkuSelect');
+  const targetSelect = document.getElementById('transTargetSlot');
+  const feedback = document.getElementById('transferFeedback');
+  const transferBox = document.getElementById('inspTransferBox');
+
+  if(feedback){
+    feedback.hidden = true;
+    feedback.textContent = '';
+    feedback.className = 'transfer-alert';
+  }
+
+  if(skuSelect){
+    if(skuKeys.length === 0){
+      skuSelect.innerHTML = `<option value="">(No items in this slot)</option>`;
+      skuSelect.disabled = true;
+      if(transferBox) transferBox.style.opacity = '0.6';
+    } else {
+      skuSelect.disabled = false;
+      if(transferBox) transferBox.style.opacity = '1';
+      skuSelect.innerHTML = skuKeys.map(sku => {
+        const item = groups[sku];
+        return `<option value="${sku}">${sku} (${item.name}) — ${item.count} available</option>`;
+      }).join('');
+    }
+  }
+
+  if(targetSelect){
+    const allSlots = [];
+    WAREHOUSE.racks.forEach(r => {
+      r.slots.forEach(s => {
+        if(s.id !== slot.id){
+          const freeL = Math.max(0, Math.round(s.maxVolume - usedVolume(s)));
+          const freeKg = Math.max(0, Math.round((s.maxWeight || 400) - usedWeight(s)));
+          allSlots.push({ id: s.id, rackName: r.name, freeL, freeKg, status: s.status });
+        }
+      });
+    });
+
+    // Sort target slots by free volume descending
+    allSlots.sort((a, b) => b.freeL - a.freeL);
+
+    targetSelect.innerHTML = `<option value="">Choose target slot...</option>` +
+      allSlots.map(s => `<option value="${s.id}">${s.id} (${s.rackName}) · ${s.freeL} L free / ${s.freeKg} kg free</option>`).join('');
+  }
+
+  // Show Modal
+  modal.classList.add('on');
+}
+
+function initSlotInspector(){
+  // Delegate click on slots
+  document.addEventListener('click', function(e){
+    const slotEl = e.target.closest('.slot');
+    if(slotEl && slotEl.dataset.slotId){
+      openSlotInspector(slotEl.dataset.slotId);
+    }
+  });
+
+  // Close button
+  const closeBtn = document.getElementById('btnCloseInspector');
+  const modal = document.getElementById('modalSlotInspector');
+  if(closeBtn && modal){
+    closeBtn.addEventListener('click', function(){
+      modal.classList.remove('on');
+    });
+  }
+
+  // Transfer Form Submit
+  const transferForm = document.getElementById('transferForm');
+  const feedback = document.getElementById('transferFeedback');
+  const btnConfirm = document.getElementById('btnConfirmTransfer');
+  const btnQuickPick = document.getElementById('btnQuickPick');
+
+  if(transferForm){
+    transferForm.addEventListener('submit', async function(e){
+      e.preventDefault();
+      if(!currentInspectSlotId) return;
+
+      const sku = (document.getElementById('transSkuSelect') || {}).value;
+      const targetSlotId = (document.getElementById('transTargetSlot') || {}).value;
+      const qty = Number((document.getElementById('transQty') || {}).value) || 1;
+
+      if(!sku){
+        showTransferAlert('bad', 'Please select an SKU to transfer.');
+        return;
+      }
+      if(!targetSlotId){
+        showTransferAlert('bad', 'Please choose a destination slot.');
+        return;
+      }
+
+      if(btnConfirm){
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Relocating stock...';
+      }
+
+      try{
+        const url = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/transfer') : '/api/warehouse/transfer';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            warehouseId: WAREHOUSE.id,
+            fromSlotId: currentInspectSlotId,
+            toSlotId: targetSlotId,
+            sku,
+            quantity: qty
+          })
+        });
+
+        const data = await res.json();
+        if(res.ok && data.success){
+          showTransferAlert('good', `✔ ${data.message || 'Stock successfully relocated!'}`);
+          // Sync live state from cloud
+          await syncFromCloud(WAREHOUSE.id);
+          renderAll();
+          // Update the inspector with the new state
+          setTimeout(() => {
+            openSlotInspector(currentInspectSlotId);
+            if(btnConfirm){
+              btnConfirm.disabled = false;
+              btnConfirm.textContent = '⇄ Execute Stock Relocation';
+            }
+          }, 700);
+        } else {
+          showTransferAlert('bad', `✕ ${data.message || 'Transfer failed.'}`);
+          if(btnConfirm){
+            btnConfirm.disabled = false;
+            btnConfirm.textContent = '⇄ Execute Stock Relocation';
+          }
+        }
+      }catch(err){
+        showTransferAlert('bad', `✕ Network error: ${err.message}`);
+        if(btnConfirm){
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = '⇄ Execute Stock Relocation';
+        }
+      }
+    });
+  }
+
+  // Quick Pick Button
+  if(btnQuickPick){
+    btnQuickPick.addEventListener('click', async function(){
+      if(!currentInspectSlotId) return;
+      const sku = (document.getElementById('transSkuSelect') || {}).value;
+      const qty = Number((document.getElementById('transQty') || {}).value) || 1;
+
+      if(!sku){
+        showTransferAlert('bad', 'Please select an SKU to pick.');
+        return;
+      }
+
+      if(!confirm(`Pick and remove ${qty} unit(s) of ${sku} from ${currentInspectSlotId}?`)) return;
+
+      btnQuickPick.disabled = true;
+      btnQuickPick.textContent = 'Picking...';
+
+      try{
+        const url = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/remove') : '/api/warehouse/remove';
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            warehouseId: WAREHOUSE.id,
+            slotId: currentInspectSlotId,
+            sku,
+            quantity: qty
+          })
+        });
+
+        const data = await res.json();
+        if(res.ok && data.success){
+          showTransferAlert('good', `✔ Picked ${data.removed || qty} unit(s) of ${sku} from ${currentInspectSlotId}`);
+          await syncFromCloud(WAREHOUSE.id);
+          renderAll();
+          setTimeout(() => {
+            openSlotInspector(currentInspectSlotId);
+            btnQuickPick.disabled = false;
+            btnQuickPick.textContent = '📤 Quick Pick SKU';
+          }, 700);
+        } else {
+          showTransferAlert('bad', `✕ ${data.message || 'Pick failed.'}`);
+          btnQuickPick.disabled = false;
+          btnQuickPick.textContent = '📤 Quick Pick SKU';
+        }
+      }catch(err){
+        showTransferAlert('bad', `✕ Error: ${err.message}`);
+        btnQuickPick.disabled = false;
+        btnQuickPick.textContent = '📤 Quick Pick SKU';
+      }
+    });
+  }
+
+  function showTransferAlert(type, msg){
+    if(!feedback) return;
+    feedback.hidden = false;
+    feedback.className = `transfer-alert ${type}`;
+    feedback.textContent = msg;
+  }
 }
