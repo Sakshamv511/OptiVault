@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSignInForm();
   initSignUpForm();
   initPasswordToggles();
+  initGoogleAuth();
 });
 
 
@@ -154,10 +155,27 @@ function initSignInForm(){
   const btnText = btn.querySelector('.btn-text');
   const errorBox = document.getElementById('formError');
 
-  const role = getSelectedRole();
+  let role = getSelectedRole();
 
-  showRoleOnCard(role);
+  function applyRole(newRole){
+    role = newRole;
+    try { localStorage.setItem(STORAGE.role, newRole); } catch(e){}
+    if(window.history && window.history.replaceState){
+      const url = new URL(window.location.href);
+      url.searchParams.set('role', newRole);
+      window.history.replaceState({}, '', url);
+    }
+    showRoleOnCard(newRole);
+  }
 
+  // Bind interactive in-page role switcher pills
+  document.querySelectorAll('[data-role-btn]').forEach(pill => {
+    pill.addEventListener('click', () => {
+      applyRole(pill.dataset.roleBtn);
+    });
+  });
+
+  applyRole(role);
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -184,9 +202,9 @@ function initSignInForm(){
     btnText.textContent = 'VERIFYING…';
 
     // Short pause so the state change is visible.
-    setTimeout(() => {
+    setTimeout(async () => {
 
-      const result = checkCredentials(
+      const result = await checkCredentials(
         role,
         email.value.trim().toLowerCase(),
         password.value
@@ -194,7 +212,10 @@ function initSignInForm(){
 
       if(result.ok){
         startSession(result.session);
-        window.location.href = ROLE_DESTINATIONS[role] || 'index.html';
+        const destination = result.session.role === 'platform-admin'
+          ? 'platform-admin.html'
+          : (ROLE_DESTINATIONS[result.session.role || role] || 'index.html');
+        window.location.href = destination;
         return;
       }
 
@@ -217,26 +238,55 @@ function initSignInForm(){
 
 
 /* ---------- the actual access check ---------- */
-function checkCredentials(role, emailValue, passwordValue){
+async function checkCredentials(role, emailValue, passwordValue){
 
-  // Platform admin is a single fixed login held in this file.
-  if(role === 'platform-admin'){
-    const matches =
-      emailValue === PLATFORM_ADMIN.email &&
-      passwordValue === PLATFORM_ADMIN.password;
+  // Platform admin check (matches credentials regardless of pre-selected role)
+  if(emailValue === PLATFORM_ADMIN.email.toLowerCase()){
+    if(passwordValue === PLATFORM_ADMIN.password){
+      const session = { role: 'platform-admin', email: emailValue, company: 'OptiVault' };
+      startSession(session);
+      try {
+        const adminLoginUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/login') : '/api/auth/login';
+        fetch(adminLoginUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailValue, password: passwordValue, role: 'platform-admin' })
+        }).then(r => r.json()).then(d => {
+          if (d.token) {
+            try { localStorage.setItem('optivault-jwt', d.token); } catch(e){}
+          }
+        }).catch(()=>{});
+      } catch(e){}
+      return { ok: true, session };
+    }
+    return { ok: false, message: 'That is not a valid platform admin login.' };
+  }
 
-    if(matches){
+  // 1. Try backend API authentication
+  try {
+    const loginUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/login') : '/api/auth/login';
+    const res = await fetch(loginUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailValue, password: passwordValue, role })
+    });
+    const data = await res.json();
+    if(data.success && data.token){
+      try { localStorage.setItem('optivault-jwt', data.token); } catch(err){}
       return {
         ok: true,
-        session: { role, email: emailValue, company: 'OptiVault' }
+        session: data.user
       };
     }
-
     return {
       ok: false,
-      message: 'That is not a valid platform admin login.'
+      message: data.message || 'Authentication failed.'
     };
+  } catch(netErr) {
+    console.warn('Backend not reached, checking local fallback:', netErr);
   }
+
+  // 2. Local fallback if server is offline
 
   // Everyone else signs in with their company account.
   const company = getCompanies().find(
@@ -285,18 +335,53 @@ function startSession(session){
 function showRoleOnCard(role){
   const banner = document.getElementById('roleBanner');
   const label = document.getElementById('roleLabel');
-  if(!banner || !label) return;
+  if(label) label.textContent = ROLE_LABELS[role] || 'Company access';
+  if(banner) banner.hidden = false;
 
-  label.textContent = ROLE_LABELS[role] || 'Company access';
-  banner.hidden = false;
+  // Update In-Page Interactive Role Switcher Pills
+  document.querySelectorAll('[data-role-btn]').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.roleBtn === role);
+  });
 
-  // platform admin does not use a company email
+  const activeBadge = document.getElementById('roleActiveBadge');
+  const destText = document.getElementById('roleDestText');
+
+  const roleMeta = {
+    'company-admin': {
+      badge: 'COMPANY ADMIN',
+      desc: 'Routes to multi-facility overview & facility ledger.',
+      emailLabel: 'ORGANIZATION EMAIL',
+      placeholder: 'Enter company email (e.g. ops@harborbell.com)'
+    },
+    'supervisor': {
+      badge: 'SITE SUPERVISOR',
+      desc: 'Routes to warehouse site passcode picker (Mohali, Chandigarh, Patiala).',
+      emailLabel: 'SUPERVISOR / COMPANY EMAIL',
+      placeholder: 'Enter authorized email (e.g. ops@harborbell.com)'
+    },
+    'platform-admin': {
+      badge: 'PLATFORM ADMIN',
+      desc: 'Routes to platform administration console (approvals & metrics).',
+      emailLabel: 'ADMIN EMAIL',
+      placeholder: 'admin@optivault.internal'
+    }
+  };
+
+  const currentMeta = roleMeta[role] || roleMeta['company-admin'];
+  if(activeBadge) activeBadge.textContent = currentMeta.badge;
+  if(destText) destText.textContent = currentMeta.desc;
+
   const emailField = document.getElementById('orgEmail');
   const emailLabel = document.querySelector('label[for="orgEmail"]');
+  if(emailField && emailLabel){
+    emailLabel.textContent = currentMeta.emailLabel;
+    emailField.placeholder = currentMeta.placeholder;
+  }
 
-  if(role === 'platform-admin' && emailField && emailLabel){
-    emailLabel.textContent = 'ADMIN EMAIL';
-    emailField.placeholder = 'Enter the admin email';
+  // Hide Google Sign-In for Platform Admin
+  const googleAuthBox = document.getElementById('googleAuthBox');
+  if(googleAuthBox){
+    googleAuthBox.style.display = role === 'platform-admin' ? 'none' : '';
   }
 }
 
@@ -424,22 +509,45 @@ function initSignUpForm(){
     btn.disabled = true;
     btnText.textContent = 'SENDING…';
 
+    const ref = makeReference();
+
+    // 1. Immediately save to LocalStorage so existing sync and tabs work
+    companies.push({
+      name: companyName.value.trim(),
+      contact: contactName.value.trim(),
+      email: emailValue,
+      password: password.value,
+      requestedWarehouses: parseInt(warehouses.value, 10),
+      status: 'pending',
+      reference: ref,
+      warehouses: []
+    });
+    saveCompanies(companies);
+
+    // 2. Dispatch to backend API in background to save in MongoDB and send SMTP email
+    const regUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/register') : '/api/auth/register';
+    fetch(regUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyName: companyName.value.trim(),
+        contactName: contactName.value.trim(),
+        workEmail: emailValue,
+        warehouseCount: parseInt(warehouses.value, 10),
+        password: password.value
+      })
+    }).then(r => r.json()).then(data => {
+      if(data.success && data.reference){
+        const refSlot = document.getElementById('successRef');
+        if(refSlot) refSlot.textContent = data.reference;
+      }
+    }).catch(err => {
+      console.warn('Backend API registration note:', err);
+    });
+
+    // 3. Play the success screen box-clearing animation after 700ms
     setTimeout(() => {
-
-      companies.push({
-        name: companyName.value.trim(),
-        contact: contactName.value.trim(),
-        email: emailValue,
-        password: password.value,
-        requestedWarehouses: parseInt(warehouses.value, 10),
-        status: 'pending',       // platform admin approves this
-        warehouses: []
-      });
-
-      saveCompanies(companies);
-
-      playSuccessScreen(companyName.value.trim());
-
+      playSuccessScreen(companyName.value.trim(), ref);
     }, 700);
   });
 
@@ -457,7 +565,7 @@ function initSignUpForm(){
    Fills the screen with boxes, clears them one by one,
    then reveals the message underneath.
    ========================================================== */
-function playSuccessScreen(company){
+function playSuccessScreen(company, customRef){
   const screen = document.getElementById('successScreen');
   const boxWrap = document.getElementById('successBoxes');
   const message = document.getElementById('successMessage');
@@ -467,7 +575,7 @@ function playSuccessScreen(company){
   if(!screen || !boxWrap || !message) return;
 
   if(nameSlot) nameSlot.textContent = company;
-  if(refSlot) refSlot.textContent = makeReference();
+  if(refSlot) refSlot.textContent = customRef || makeReference();
 
   // how many rows fit the screen, 12 boxes per row
   const columns = 12;
@@ -518,4 +626,135 @@ function makeReference(){
   const year = now.getFullYear();
   const random = Math.floor(1000 + Math.random() * 9000);
   return `OV-${year}-${random}`;
+}
+
+/* ==========================================================
+   GOOGLE AUTHENTICATION (Google Identity Services)
+   ========================================================== */
+async function initGoogleAuth() {
+  const host = document.getElementById('googleBtnHost');
+  if (!host) return;
+
+  const currentRole = typeof getSelectedRole === 'function' ? getSelectedRole() : 'company-admin';
+  const googleAuthBox = document.getElementById('googleAuthBox');
+  if (googleAuthBox && currentRole === 'platform-admin') {
+    googleAuthBox.style.display = 'none';
+  }
+
+  let clientId = window.__GOOGLE_CLIENT_ID__ || null;
+
+  if (!clientId) {
+    try {
+      const url = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/google/client-id') : '/api/auth/google/client-id';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.clientId && !data.clientId.includes('your-google-client-id')) {
+          clientId = data.clientId;
+        }
+      }
+    } catch (e) {
+      console.warn('[Google Auth Init Note]', e);
+    }
+  }
+
+  // If no client ID configured yet, display a placeholder button with clear guidance
+  if (!clientId) {
+    host.innerHTML = `
+      <button type="button" class="google-btn-fake" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:320px;padding:9px 16px;background:#ffffff;border:1px solid #dadce0;border-radius:4px;font-family:inherit;font-size:14px;font-weight:500;color:#3c4043;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.06);transition:background 0.2s;">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.347 2.825.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/></svg>
+        <span>Sign in with Google</span>
+      </button>
+    `;
+    const btn = host.querySelector('.google-btn-fake');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const errorBox = document.getElementById('formError');
+        showError(errorBox, 'Google Client ID is not configured yet. Add GOOGLE_CLIENT_ID to your .env file.');
+      });
+    }
+    return;
+  }
+
+  // Load Google SDK if not already present
+  if (typeof google === 'undefined' || !google.accounts) {
+    await new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = resolve;
+      document.head.appendChild(script);
+    });
+  }
+
+  try {
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleAuthCallback,
+      auto_select: false
+    });
+
+    google.accounts.id.renderButton(host, {
+      type: 'standard',
+      shape: 'rectangular',
+      theme: 'outline',
+      text: 'signin_with',
+      size: 'large',
+      logo_alignment: 'left',
+      width: 320
+    });
+  } catch (err) {
+    console.warn('[Google Auth Button Error]', err);
+  }
+}
+
+async function handleGoogleAuthCallback(response) {
+  const errorBox = document.getElementById('formError');
+  if (!response || !response.credential) {
+    showError(errorBox, 'Google authentication failed or was cancelled.');
+    return;
+  }
+
+  hideError(errorBox);
+  const role = typeof getSelectedRole === 'function' ? getSelectedRole() : 'company-admin';
+  if (role === 'platform-admin') {
+    showError(errorBox, 'Sign in with Google is not available for Platform Admin.');
+    return;
+  }
+
+  try {
+    const url = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/google') : '/api/auth/google';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        credential: response.credential,
+        role: role
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      showError(errorBox, data.message || 'Google authentication was declined.');
+      return;
+    }
+
+    // Existing approved company or platform admin: Save token and session
+    if (data.token) {
+      try { localStorage.setItem('optivault-jwt', data.token); } catch (e) {}
+    }
+
+    if (data.user) {
+      startSession(data.user);
+      const destination = data.user.role === 'platform-admin'
+        ? 'platform-admin.html'
+        : (ROLE_DESTINATIONS[data.user.role || role] || 'company-dashboard.html');
+      window.location.href = destination;
+    }
+  } catch (err) {
+    console.error('[Google Auth Error]', err);
+    showError(errorBox, 'Could not reach OptiVault server. Please check your internet connection.');
+  }
 }
