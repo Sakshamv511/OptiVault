@@ -1,55 +1,83 @@
-const nodemailer = require('nodemailer');
-
 /**
- * Configure Nodemailer Transporter
- * Reads SMTP_USER and SMTP_PASS from process.env (set in Render Dashboard)
- */
-const getTransporter = () => {
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-    return nodemailer.createTransport({
-      service: process.env.SMTP_SERVICE || 'gmail',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS // 16-character Google App Password
-      }
-    });
-  }
-
-  // Fallback for development if credentials are not yet added
-  return nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    auth: {
-      user: 'ethereal.user@ethereal.email',
-      pass: 'ethereal_pass'
-    }
-  });
-};
-
-/**
- * Generic Sender Helper
+ * Sends email using Brevo's HTTPS transactional email API.
+ * Credentials are stored in Render environment variables.
  */
 const sendMail = async ({ to, subject, html }) => {
   try {
-    const transporter = getTransporter();
-    const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'OptiVault Platform <noreply@optivault.com>';
+    const apiKey = process.env.BREVO_API_KEY;
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
+    const senderName =
+      process.env.BREVO_SENDER_NAME || 'OptiVault Platform';
 
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      to,
-      subject,
-      html
-    });
+    if (!apiKey || !senderEmail) {
+      throw new Error(
+        'BREVO_API_KEY and BREVO_SENDER_EMAIL must be configured'
+      );
+    }
 
-    console.log(`[Email Success] Delivered to: ${to} | MessageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const recipients = Array.isArray(to)
+      ? to.map((email) => typeof email === 'string' ? { email } : email)
+      : [{ email: String(to).trim() }];
+
+    const response = await fetch(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: senderName,
+            email: senderEmail
+          },
+          to: recipients,
+          subject,
+          htmlContent: html
+        })
+      }
+    );
+
+    const responseText = await response.text();
+    let result = {};
+
+    try {
+      result = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      result = { message: responseText };
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Brevo API error ${response.status}: ${
+          result.message || result.code || 'Request failed'
+        }`
+      );
+    }
+
+    console.log(
+      `[Email Accepted] Brevo accepted email to ${recipients
+        .map((recipient) => recipient.email)
+        .join(', ')} | MessageId: ${result.messageId || 'not returned'}`
+    );
+
+    return {
+      success: true,
+      messageId: result.messageId || null
+    };
   } catch (error) {
-    console.error(`[Email Error] Failed to send email to ${to}:`, error.message);
-    // Return false instead of crashing the server
-    return { success: false, error: error.message };
+    console.error(
+      `[Email Error] Failed to send email to ${to}: ${error.message}`
+    );
+
+    return {
+      success: false,
+      error: error.message
+    };
   }
 };
-
 /**
  * 1. Send Registration Received Confirmation (called in authController.js)
  */
