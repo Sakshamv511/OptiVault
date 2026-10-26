@@ -18,6 +18,11 @@
 *{ box-sizing:border-box; }
 html{ scroll-behavior:smooth; }
 
+html, body{
+  overflow-x:hidden;
+  max-width:100%;
+}
+
 body{
   margin:0;
   background:var(--cream-bg);
@@ -74,11 +79,11 @@ button{ font-family:inherit; cursor:pointer; }
 .logo span{ color:var(--terracotta); }
 
 .header-status{
-  display:flex; align-items:center; gap:10px;
-  font-size:11px; letter-spacing:.08em; color:var(--ink-faint);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  font-size:10.5px; letter-spacing:.06em; color:var(--ink-faint);
   font-weight:600;
 }
-.status-item{ display:flex; align-items:center; gap:6px; }
+.status-item{ display:flex; align-items:center; gap:5px; }
 .dot{
   width:6px; height:6px; border-radius:50%;
   background:var(--terracotta); display:inline-block;
@@ -91,7 +96,13 @@ button{ font-family:inherit; cursor:pointer; }
 .back-link:hover{ color:var(--terracotta); }
 
 @media (max-width:700px){
-  .signin-header{ padding:18px 20px; flex-direction:column; align-items:flex-start; gap:10px; }
+  .signin-header{ padding:14px 16px; flex-direction:column; align-items:flex-start; gap:10px; }
+}
+
+@media (max-width:480px){
+  .signin-header{ padding:12px 14px; }
+  .header-status .sep:nth-of-type(1){ display:none; }
+  .header-status{ font-size:10px; gap:6px; }
 }
 
 /* ==========================================================
@@ -193,7 +204,87 @@ button{ font-family:inherit; cursor:pointer; }
 .auth-card h2{ font-size:23px; margin-bottom:8px; }
 .auth-card .sub{
   color:var(--ink-soft); font-size:13.5px;
-  margin-bottom:26px;
+  margin-bottom:20px;
+}
+
+/* ---------- IN-PAGE ROLE SWITCHER ---------- */
+.role-switcher-card{
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  padding:14px 16px;
+  margin-bottom:20px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.02);
+}
+.role-switcher-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+}
+.rsw-title{
+  font-size:9.5px;
+  font-weight:800;
+  letter-spacing:0.08em;
+  color:#64748b;
+  text-transform:uppercase;
+}
+.rsw-badge{
+  font-size:9.5px;
+  font-weight:800;
+  letter-spacing:0.05em;
+  background:#dbeafe;
+  color:#1e40af;
+  padding:2px 7px;
+  border-radius:4px;
+}
+.role-pills{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:6px;
+}
+.role-pill{
+  background:#fff;
+  border:1px solid #cbd5e1;
+  border-radius:7px;
+  padding:8px 4px;
+  font-size:11px;
+  font-weight:600;
+  color:#334155;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+  transition:all .18s ease;
+  box-shadow:0 1px 2px rgba(0,0,0,0.02);
+}
+.role-pill .rp-ico{
+  font-size:14px;
+}
+.role-pill:hover{
+  border-color:#0f172a;
+  background:#fafbfc;
+  transform:translateY(-1px);
+}
+.role-pill.active{
+  background:linear-gradient(135deg, #0e1116 0%, #1e293b 100%);
+  color:#ffffff !important;
+  border-color:#0e1116;
+  box-shadow:0 2px 6px rgba(14,17,22,0.3);
+}
+.role-dest-hint{
+  margin-top:10px;
+  font-size:11px;
+  color:#64748b;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  line-height:1.4;
+}
+.role-dest-hint .hint-bullet{
+  color:#10b981;
+  font-size:9px;
 }
 
 .field-label{
