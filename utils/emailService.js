@@ -1,5 +1,14 @@
 const { sendEmail } = require('../config/nodemailer');
 
+const escapeHtml = (value = '') =>
+    String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[char]);
+
 const sendRegistrationReceivedEmail = async ({
     to,
     companyName,
@@ -13,14 +22,12 @@ const sendRegistrationReceivedEmail = async ({
     const subject = 'OptiVault Registration Received';
 
     const text = `
-Hello ${contactName},
+Hello ${contactName || 'there'},
 
-Thank you for registering ${companyName} with OptiVault.
+Your registration for ${companyName || 'your company'} has been received.
+Your application is awaiting review by the platform administrators.
 
-Your company registration has been received and is awaiting
-review by the platform administrators.
-
-Registration reference: ${reference}
+Registration reference: ${reference || 'Not provided'}
 
 Regards,
 OptiVault Platform Team
@@ -29,30 +36,25 @@ OptiVault Platform Team
     const html = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6;">
             <h2>OptiVault Registration Received</h2>
-            <p>Hello ${contactName},</p>
+            <p>Hello ${escapeHtml(contactName || 'there')},</p>
             <p>
-                Thank you for registering <strong>${companyName}</strong>
-                with OptiVault.
+                Your registration for
+                <strong>${escapeHtml(companyName || 'your company')}</strong>
+                has been received.
             </p>
             <p>
-                Your company registration has been received and is
-                awaiting review by the platform administrators.
+                Your application is awaiting review by the
+                platform administrators.
             </p>
             <p>
-                <strong>Registration reference:</strong> ${reference}
+                <strong>Registration reference:</strong>
+                ${escapeHtml(reference || 'Not provided')}
             </p>
             <p>Regards,<br>OptiVault Platform Team</p>
         </div>
     `;
 
-    return sendEmail({
-        to,
-        subject,
-        text,
-        html
-    });
+    return sendEmail({ to, subject, text, html });
 };
 
-module.exports = {
-    sendRegistrationReceivedEmail
-};
+module.exports = { sendRegistrationReceivedEmail };
