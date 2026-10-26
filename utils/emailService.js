@@ -1,60 +1,149 @@
-const { sendEmail } = require('../config/nodemailer');
+const nodemailer = require('nodemailer');
 
-const escapeHtml = (value = '') =>
-    String(value).replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    })[char]);
+/**
+ * Configure Nodemailer Transporter
+ * Reads SMTP_USER and SMTP_PASS from process.env (set in Render Dashboard)
+ */
+const getTransporter = () => {
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return nodemailer.createTransport({
+      service: process.env.SMTP_SERVICE || 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS // 16-character Google App Password
+      }
+    });
+  }
 
-const sendRegistrationReceivedEmail = async ({
-    to,
-    companyName,
-    contactName,
-    reference
-}) => {
-    if (!to) {
-        throw new Error('Recipient email is required');
+  // Fallback for development if credentials are not yet added
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    auth: {
+      user: 'ethereal.user@ethereal.email',
+      pass: 'ethereal_pass'
     }
-
-    const subject = 'OptiVault Registration Received';
-
-    const text = `
-Hello ${contactName || 'there'},
-
-Your registration for ${companyName || 'your company'} has been received.
-Your application is awaiting review by the platform administrators.
-
-Registration reference: ${reference || 'Not provided'}
-
-Regards,
-OptiVault Platform Team
-`;
-
-    const html = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h2>OptiVault Registration Received</h2>
-            <p>Hello ${escapeHtml(contactName || 'there')},</p>
-            <p>
-                Your registration for
-                <strong>${escapeHtml(companyName || 'your company')}</strong>
-                has been received.
-            </p>
-            <p>
-                Your application is awaiting review by the
-                platform administrators.
-            </p>
-            <p>
-                <strong>Registration reference:</strong>
-                ${escapeHtml(reference || 'Not provided')}
-            </p>
-            <p>Regards,<br>OptiVault Platform Team</p>
-        </div>
-    `;
-
-    return sendEmail({ to, subject, text, html });
+  });
 };
 
-module.exports = { sendRegistrationReceivedEmail };
+/**
+ * Generic Sender Helper
+ */
+const sendMail = async ({ to, subject, html }) => {
+  try {
+    const transporter = getTransporter();
+    const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || 'OptiVault Platform <noreply@optivault.com>';
+
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to,
+      subject,
+      html
+    });
+
+    console.log(`[Email Success] Delivered to: ${to} | MessageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`[Email Error] Failed to send email to ${to}:`, error.message);
+    // Return false instead of crashing the server
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * 1. Send Registration Received Confirmation (called in authController.js)
+ */
+const sendRegistrationReceivedEmail = async ({ to, companyName, contactName, reference }) => {
+  const siteUrl = process.env.FRONTEND_URL || 'https://optivault-warehouse.vercel.app';
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <h2 style="color: #38bdf8; margin-top: 0;">OptiVault Application Received</h2>
+        <p>Hello <strong>${contactName || 'Team'}</strong>,</p>
+        <p>We received your registration request for <strong>${companyName}</strong>.</p>
+        <div style="background: #0f172a; border-left: 4px solid #38bdf8; padding: 12px 16px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 13px; color: #94a3b8;">Tracking Reference ID:</p>
+          <p style="margin: 5px 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #38bdf8;">${reference}</p>
+        </div>
+        <p style="font-size: 14px; color: #94a3b8;">Our Platform Administration team will review your warehouse profile. You will receive an email as soon as your account is approved.</p>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault B2B Automated Notification
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendMail({
+    to,
+    subject: `[OptiVault] Registration Received — ${reference}`,
+    html
+  });
+};
+
+/**
+ * 2. Send Approval Email (called in adminController.js)
+ */
+const sendApprovalEmail = async ({ to, companyName, contactName, appUrl }) => {
+  const base = process.env.FRONTEND_URL || appUrl || 'https://optivault-warehouse.vercel.app';
+  const loginUrl = `${base.replace(/\/$/, '')}/signin.html?role=company-admin`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <span style="background: #065f46; color: #34d399; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">Approved</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Welcome to OptiVault, ${companyName}!</h2>
+        <p>Dear ${contactName || 'Team'},</p>
+        <p>Your registration for <strong>${companyName}</strong> has been reviewed and <strong>approved</strong> by the platform admin team.</p>
+        <p>Your company workspace is active. You can now log in to manage your warehouse facilities and 2D slot inventory.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${loginUrl}" style="background: #38bdf8; color: #0f172a; padding: 12px 24px; border-radius: 6px; font-weight: bold; text-decoration: none; display: inline-block;">Log In to Company Workspace →</a>
+        </div>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault Warehouse Optimization System
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendMail({
+    to,
+    subject: `[OptiVault] Account Approved — ${companyName}`,
+    html
+  });
+};
+
+/**
+ * 3. Send Rejection Email (called in adminController.js)
+ */
+const sendRejectionEmail = async ({ to, companyName, contactName, reason }) => {
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <span style="background: #7f1d1d; color: #fca5a5; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">Status Update</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Registration Update for ${companyName}</h2>
+        <p>Dear ${contactName || 'Applicant'},</p>
+        <p>Thank you for your interest in OptiVault. After review, we regret to inform you that your registration could not be approved at this time.</p>
+        <div style="background: #0f172a; border-left: 4px solid #ef4444; padding: 12px; margin: 15px 0; font-size: 13px; color: #cbd5e1;">
+          <strong>Review Note:</strong> ${reason || 'Application criteria requirements were not met.'}
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">If you believe this was in error, please reach out to admin support.</p>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault Platform Administration
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendMail({
+    to,
+    subject: `[OptiVault] Application Status Update — ${companyName}`,
+    html
+  });
+};
+
+module.exports = {
+  sendRegistrationReceivedEmail,
+  sendApprovalEmail,
+  sendRejectionEmail
+};
