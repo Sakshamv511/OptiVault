@@ -61,16 +61,56 @@
     <!-- ============ RIGHT: sign-in card ============ -->
     <section class="auth-card reveal">
       <div class="eyebrow">COMPANY ACCESS</div>
-      <h2>Sign in to Slotwise</h2>
+      <h2>Sign in to OptiVault</h2>
       <p class="sub">Use the organization email registered to your workspace.</p>
 
-      <!-- shows which role was picked in the landing-page modal -->
-      <div class="role-banner" id="roleBanner" hidden>
-        <span class="role-banner-text" id="roleLabel">Company access</span>
-        <a href="index.html" class="role-banner-change">CHANGE</a>
+      <!-- In-Page Interactive Role Switcher (1-click toggle between roles) -->
+      <div class="role-switcher-card">
+        <div class="role-switcher-head">
+          <span class="rsw-title">ACCESS PORTAL ROLE</span>
+          <span class="rsw-badge" id="roleActiveBadge">COMPANY ADMIN</span>
+        </div>
+        <div class="role-pills" id="rolePills" role="tablist">
+          <button type="button" class="role-pill active" data-role-btn="company-admin" title="Multi-facility oversight and reporting">
+            <span class="rp-ico">🏢</span>
+            <span>Company Admin</span>
+          </button>
+          <button type="button" class="role-pill" data-role-btn="supervisor" title="Access 2D/3D floor allocation and inventory">
+            <span class="rp-ico">👷</span>
+            <span>Supervisor</span>
+          </button>
+          <button type="button" class="role-pill" data-role-btn="platform-admin" title="Platform approvals and company accounts">
+            <span class="rp-ico">🛡️</span>
+            <span>Platform Admin</span>
+          </button>
+        </div>
+        <div class="role-dest-hint" id="roleDestHint">
+          <span class="hint-bullet">●</span> <span id="roleDestText">Redirects to company-wide overview &amp; facility management.</span>
+        </div>
       </div>
 
       <div class="form-error" id="formError" role="alert"></div>
+
+      <!-- Google Sign-In Option -->
+      <div class="google-auth-box" id="googleAuthBox" style="margin-bottom: 20px;">
+        <script>
+          (function(){
+            try {
+              var params = new URLSearchParams(window.location.search);
+              var role = params.get('role') || localStorage.getItem('optivault-role');
+              if (role === 'platform-admin') {
+                document.getElementById('googleAuthBox').style.display = 'none';
+              }
+            } catch(e) {}
+          })();
+        </script>
+        <div id="googleBtnHost" style="display: flex; justify-content: center; min-height: 44px;"></div>
+        <div class="auth-divider" style="display: flex; align-items: center; text-align: center; margin: 18px 0 10px; color: #8e877e; font-size: 11px; font-weight: 700; letter-spacing: 0.1em;">
+          <span style="flex: 1; border-bottom: 1px solid #e2ddd5;"></span>
+          <span style="padding: 0 10px;">OR WITH EMAIL & PASSWORD</span>
+          <span style="flex: 1; border-bottom: 1px solid #e2ddd5;"></span>
+        </div>
+      </div>
 
       <form id="signinForm" novalidate>
         <label class="field-label" for="orgEmail">ORGANIZATION EMAIL</label>
@@ -109,6 +149,7 @@
   </div>
 </main>
 
+<script src="js/api-config.js"></script>
 <script src="js/sigin.js"></script>
 </body>
 </html>
