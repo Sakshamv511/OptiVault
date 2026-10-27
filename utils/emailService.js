@@ -1,78 +1,64 @@
-const { sendEmail: sendViaNodemailer } = require('../config/nodemailer');
+const sendMail = async ({ to, subject, html, text }) => {
+  const relayUrl = process.env.EMAIL_RELAY_URL;
+  const token = process.env.EMAIL_RELAY_SECRET;
 
-/**
- * Sends transactional email using SendGrid's HTTPS API,
- * with fallback to Nodemailer (SMTP / Ethereal) for local testing.
- */
-const sendMail = async ({ to, subject, html }) => {
-  const sendgridApiKey = process.env.SENDGRID_API_KEY;
-  const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'optivault601@gmail.com';
-  const senderName = process.env.EMAIL_SENDER_NAME || 'OptiVault Platform';
-  const recipients = Array.isArray(to) ? to : [String(to).trim()];
+  try {
+    if (!relayUrl || !token) {
+      throw new Error('Email relay environment variables are missing');
+    }
 
-  // 1. Send via SendGrid HTTPS API (Works on Render, sends to ANY email worldwide)
-  if (sendgridApiKey) {
-    try {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    const recipients = Array.isArray(to)
+      ? to.map((item) =>
+          typeof item === 'string' ? item : item.email
+        ).filter(Boolean)
+      : [String(to || '').trim()];
+
+    if (!recipients.length || !subject || (!html && !text)) {
+      throw new Error('Recipient, subject, and message are required');
+    }
+
+    for (const recipient of recipients) {
+      const response = await fetch(relayUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${sendgridApiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          personalizations: [
-            {
-              to: recipients.map(email => ({ email: String(email).trim() }))
-            }
-          ],
-          from: {
-            email: fromEmail,
-            name: senderName
-          },
+          token,
+          to: recipient,
           subject,
-          content: [
-            {
-              type: 'text/html',
-              value: html
-            }
-          ]
+          html: html || '',
+          text: text || String(html || '').replace(/<[^>]*>/g, ' ')
         })
       });
 
-      if (response.status === 202 || response.ok) {
-        console.log(`[Email Delivered via SendGrid] To: ${recipients.join(', ')} | Status: 202 Accepted`);
-        return {
-          success: true,
-          messageId: `sendgrid-${Date.now()}`
-        };
-      } else {
-        const errText = await response.text();
-        console.warn(`[SendGrid Warning] ${response.status}: ${errText}. Attempting fallback...`);
+      const responseText = await response.text();
+      let result;
+
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error('Email relay returned an invalid response');
       }
-    } catch (sgErr) {
-      console.warn(`[SendGrid Error] ${sgErr.message}. Attempting fallback...`);
+
+      if (!response.ok || result.success !== true) {
+        throw new Error(
+          result.error || `Email relay failed with HTTP ${response.status}`
+        );
+      }
     }
-  }
 
-  // 2. Fallback to Nodemailer (Gmail SMTP or Ethereal test mailer)
-  try {
-    const toAddress = recipients.join(', ');
-    const result = await sendViaNodemailer({
-      to: toAddress,
-      subject,
-      html
-    });
+    console.log(
+      `[Email Accepted] Google Apps Script relay accepted email to ${recipients.join(', ')}`
+    );
 
-    return {
-      success: true,
-      previewUrl: result.previewUrl || null,
-      messageId: result.info && result.info.messageId ? result.info.messageId : null
-    };
-  } catch (nodemailerError) {
-    console.error(`[Email Error] Failed to send email to ${recipients.join(', ')}: ${nodemailerError.message}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[Email Error] Failed to send email: ${error.message}`);
+
     return {
       success: false,
-      error: nodemailerError.message
+      error: error.message
     };
   }
 };
