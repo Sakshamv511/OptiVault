@@ -60,13 +60,17 @@ const register = async (req, res, next) => {
       warehouses: []
     });
 
-    // Send confirmation email asynchronously via SMTP
-    sendRegistrationReceivedEmail({
-      to: company.email,
-      companyName: company.name,
-      contactName: company.contact,
-      reference
-    }).catch(err => console.warn('[SMTP Registration Email Failed]', err.message));
+    // Send confirmation email via Resend / SMTP
+    try {
+      await sendRegistrationReceivedEmail({
+        to: company.email,
+        companyName: company.name,
+        contactName: company.contact,
+        reference
+      });
+    } catch (err) {
+      console.warn('[Registration Email Failed]', err.message);
+    }
 
     return res.status(201).json({
       success: true,

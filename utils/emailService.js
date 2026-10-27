@@ -1,193 +1,161 @@
-const { sendEmail } = require('../config/nodemailer');
+const sendMail = async ({ to, subject, html, text }) => {
+  const relayUrl = process.env.EMAIL_RELAY_URL;
+  const token = process.env.EMAIL_RELAY_SECRET;
 
-/**
- * Send approval email to company admin
- */
-const sendApprovalEmail = async ({ to, companyName, contactName, appUrl }) => {
-  const base = process.env.FRONTEND_URL || appUrl || 'https://optivault-warehouse.vercel.app';
-  const loginUrl = `${base.replace(/\/$/, '')}/signin.html?role=company-admin`;
+  try {
+    if (!relayUrl || !token) {
+      throw new Error('Email relay environment variables are missing');
+    }
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f7f5f0; margin: 0; padding: 30px; color: #1e1e1e; }
-        .container { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e0d8; border-radius: 8px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-        .header { border-bottom: 2px solid #e5e0d8; padding-bottom: 18px; margin-bottom: 24px; }
-        .logo { font-size: 20px; font-weight: 700; letter-spacing: 0.1em; color: #1e1e1e; }
-        .logo span { color: #d97736; }
-        .badge { display: inline-block; background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
-        h1 { font-size: 24px; margin: 0 0 16px; color: #1e1e1e; font-weight: 600; line-height: 1.3; }
-        p { font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 16px; }
-        .info-card { background: #faf9f6; border: 1px solid #ebe7df; border-radius: 6px; padding: 18px; margin: 20px 0; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-        .info-row:last-child { margin-bottom: 0; }
-        .info-label { color: #787570; font-weight: 500; }
-        .info-val { font-weight: 600; color: #1e1e1e; }
-        .cta-btn { display: inline-block; background: #d97736; color: #ffffff !important; text-decoration: none; padding: 12px 26px; border-radius: 5px; font-weight: 600; font-size: 14px; letter-spacing: 0.05em; margin-top: 14px; }
-        .footer { margin-top: 32px; padding-top: 18px; border-top: 1px solid #eee; font-size: 12px; color: #8e8b85; line-height: 1.5; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="logo">OPTI<span>VAULT</span></div>
-        </div>
-        <span class="badge">Registration Approved</span>
-        <h1>Welcome to OptiVault, ${companyName}!</h1>
-        <p>Dear ${contactName || 'Team'},</p>
-        <p>We are pleased to inform you that your registration for <strong>${companyName}</strong> has been reviewed and <strong>approved</strong> by the platform administration team.</p>
-        
-        <div class="info-card">
-          <div class="info-row">
-            <span class="info-label">Account Status:</span>
-            <span class="info-val" style="color:#2e7d32">Active & Ready</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Registered Email:</span>
-            <span class="info-val">${to}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Authorized Role:</span>
-            <span class="info-val">Company Admin & Supervisors</span>
-          </div>
-        </div>
+    const recipients = Array.isArray(to)
+      ? to.map((item) =>
+          typeof item === 'string' ? item : item.email
+        ).filter(Boolean)
+      : [String(to || '').trim()];
 
-        <p>Your workspace is now live. You can sign in using your registered credentials to access your warehouse dashboard, request new facilities, and manage your inventory allocation.</p>
+    if (!recipients.length || !subject || (!html && !text)) {
+      throw new Error('Recipient, subject, and message are required');
+    }
 
-        <a href="${loginUrl}" class="cta-btn">SIGN IN TO WORKSPACE →</a>
+    for (const recipient of recipients) {
+      const response = await fetch(relayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token,
+          to: recipient,
+          subject,
+          html: html || '',
+          text: text || String(html || '').replace(/<[^>]*>/g, ' ')
+        })
+      });
 
-        <div class="footer">
-          <p>OptiVault Warehouse Management & Slot Allocation System.<br>If you did not make this request or have questions, contact us at admin@optivault.internal.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+      const responseText = await response.text();
+      let result;
 
-  return sendEmail({
-    to,
-    subject: `[OptiVault] Registration Approved — ${companyName}`,
-    html
-  });
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error('Email relay returned an invalid response');
+      }
+
+      if (!response.ok || result.success !== true) {
+        throw new Error(
+          result.error || `Email relay failed with HTTP ${response.status}`
+        );
+      }
+    }
+
+    console.log(
+      `[Email Accepted] Google Apps Script relay accepted email to ${recipients.join(', ')}`
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[Email Error] Failed to send email: ${error.message}`);
+
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 };
-
 /**
- * Send rejection email to company applicant
- */
-const sendRejectionEmail = async ({ to, companyName, contactName, reason }) => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f7f5f0; margin: 0; padding: 30px; color: #1e1e1e; }
-        .container { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e0d8; border-radius: 8px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-        .header { border-bottom: 2px solid #e5e0d8; padding-bottom: 18px; margin-bottom: 24px; }
-        .logo { font-size: 20px; font-weight: 700; letter-spacing: 0.1em; color: #1e1e1e; }
-        .logo span { color: #d97736; }
-        .badge { display: inline-block; background: #ffebee; color: #c62828; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
-        h1 { font-size: 24px; margin: 0 0 16px; color: #1e1e1e; font-weight: 600; line-height: 1.3; }
-        p { font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 16px; }
-        .info-card { background: #faf9f6; border: 1px solid #ebe7df; border-radius: 6px; padding: 18px; margin: 20px 0; }
-        .footer { margin-top: 32px; padding-top: 18px; border-top: 1px solid #eee; font-size: 12px; color: #8e8b85; line-height: 1.5; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="logo">OPTI<span>VAULT</span></div>
-        </div>
-        <span class="badge">Application Declined</span>
-        <h1>Registration Status Update</h1>
-        <p>Dear ${contactName || 'Applicant'},</p>
-        <p>Thank you for your interest in OptiVault. After review by our platform administration team, we regret to inform you that your company registration for <strong>${companyName}</strong> could not be approved at this time.</p>
-        
-        <div class="info-card">
-          <p style="margin: 0; font-size: 14px; color: #555;">
-            <strong>Decision note:</strong> ${reason || 'The application did not satisfy our verification criteria or facility profile requirements.'}
-          </p>
-        </div>
-
-        <p>If you believe this was an error or would like to submit updated company information, please reach out directly to our platform support team.</p>
-
-        <div class="footer">
-          <p>OptiVault Administration · admin@optivault.internal<br>This is an automated notification sent via OptiVault SMTP service.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  return sendEmail({
-    to,
-    subject: `[OptiVault] Registration Status Update — ${companyName}`,
-    html
-  });
-};
-
-/**
- * Send registration received confirmation
+ * 1. Send Registration Received Confirmation (called in authController.js)
  */
 const sendRegistrationReceivedEmail = async ({ to, companyName, contactName, reference }) => {
   const siteUrl = process.env.FRONTEND_URL || 'https://optivault-warehouse.vercel.app';
 
   const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f7f5f0; margin: 0; padding: 30px; color: #1e1e1e; }
-        .container { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e0d8; border-radius: 8px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-        .header { border-bottom: 2px solid #e5e0d8; padding-bottom: 18px; margin-bottom: 24px; }
-        .logo { font-size: 20px; font-weight: 700; letter-spacing: 0.1em; color: #1e1e1e; }
-        .logo span { color: #d97736; }
-        .badge { display: inline-block; background: #fff8e1; color: #b78103; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
-        h1 { font-size: 22px; margin: 0 0 16px; color: #1e1e1e; font-weight: 600; line-height: 1.3; }
-        p { font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 16px; }
-        .ref-box { background: #faf9f6; border: 1px dashed #d97736; border-radius: 6px; padding: 14px; text-align: center; margin: 20px 0; font-family: monospace; font-size: 16px; font-weight: 700; color: #d97736; }
-        .cta-btn { display: inline-block; background: #1e1e1e; color: #ffffff !important; text-decoration: none; padding: 11px 22px; border-radius: 5px; font-weight: 600; font-size: 13px; letter-spacing: 0.04em; }
-        .footer { margin-top: 32px; padding-top: 18px; border-top: 1px solid #eee; font-size: 12px; color: #8e8b85; line-height: 1.5; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <div class="logo">OPTI<span>VAULT</span></div>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <h2 style="color: #38bdf8; margin-top: 0;">OptiVault Application Received</h2>
+        <p>Hello <strong>${contactName || 'Team'}</strong>,</p>
+        <p>We received your registration request for <strong>${companyName}</strong>.</p>
+        <div style="background: #0f172a; border-left: 4px solid #38bdf8; padding: 12px 16px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 13px; color: #94a3b8;">Tracking Reference ID:</p>
+          <p style="margin: 5px 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #38bdf8;">${reference}</p>
         </div>
-        <span class="badge">Under Review</span>
-        <h1>Registration Received</h1>
-        <p>Dear ${contactName || 'Team'},</p>
-        <p>We have successfully received your company registration for <strong>${companyName}</strong>.</p>
-        <p>Your registration reference number is:</p>
-        <div class="ref-box">${reference}</div>
-        <p>Our platform administrators review each registration within 2 working days to verify facility specifications and set up the slot allocation profile. You will receive an email once the decision has been made.</p>
-        
-        <p style="margin-top: 22px; text-align: center;">
-          <a href="${siteUrl}" class="cta-btn">VISIT OPTIVAULT PORTAL →</a>
-        </p>
-
-        <div class="footer">
-          <p>OptiVault Platform: <a href="${siteUrl}" style="color:#d97736;">${siteUrl}</a><br>OptiVault Administration · admin@optivault.internal</p>
+        <p style="font-size: 14px; color: #94a3b8;">Our Platform Administration team will review your warehouse profile. You will receive an email as soon as your account is approved.</p>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault B2B Automated Notification
         </div>
       </div>
-    </body>
-    </html>
+    </div>
   `;
 
-  return sendEmail({
+  return sendMail({
     to,
     subject: `[OptiVault] Registration Received — ${reference}`,
     html
   });
 };
 
+/**
+ * 2. Send Approval Email (called in adminController.js)
+ */
+const sendApprovalEmail = async ({ to, companyName, contactName, appUrl }) => {
+  const base = process.env.FRONTEND_URL || appUrl || 'https://optivault-warehouse.vercel.app';
+  const loginUrl = `${base.replace(/\/$/, '')}/signin.html?role=company-admin`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <span style="background: #065f46; color: #34d399; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">Approved</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Welcome to OptiVault, ${companyName}!</h2>
+        <p>Dear ${contactName || 'Team'},</p>
+        <p>Your registration for <strong>${companyName}</strong> has been reviewed and <strong>approved</strong> by the platform admin team.</p>
+        <p>Your company workspace is active. You can now log in to manage your warehouse facilities and 2D slot inventory.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${loginUrl}" style="background: #38bdf8; color: #0f172a; padding: 12px 24px; border-radius: 6px; font-weight: bold; text-decoration: none; display: inline-block;">Log In to Company Workspace →</a>
+        </div>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault Warehouse Optimization System
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendMail({
+    to,
+    subject: `[OptiVault] Account Approved — ${companyName}`,
+    html
+  });
+};
+
+/**
+ * 3. Send Rejection Email (called in adminController.js)
+ */
+const sendRejectionEmail = async ({ to, companyName, contactName, reason }) => {
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; padding: 30px; color: #f8fafc;">
+      <div style="max-width: 540px; margin: 0 auto; background: #1e293b; border-radius: 8px; padding: 30px; border: 1px solid #334155;">
+        <span style="background: #7f1d1d; color: #fca5a5; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">Status Update</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Registration Update for ${companyName}</h2>
+        <p>Dear ${contactName || 'Applicant'},</p>
+        <p>Thank you for your interest in OptiVault. After review, we regret to inform you that your registration could not be approved at this time.</p>
+        <div style="background: #0f172a; border-left: 4px solid #ef4444; padding: 12px; margin: 15px 0; font-size: 13px; color: #cbd5e1;">
+          <strong>Review Note:</strong> ${reason || 'Application criteria requirements were not met.'}
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">If you believe this was in error, please reach out to admin support.</p>
+        <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #334155; font-size: 12px; color: #64748b;">
+          OptiVault Platform Administration
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendMail({
+    to,
+    subject: `[OptiVault] Application Status Update — ${companyName}`,
+    html
+  });
+};
+
 module.exports = {
+  sendRegistrationReceivedEmail,
   sendApprovalEmail,
-  sendRejectionEmail,
-  sendRegistrationReceivedEmail
+  sendRejectionEmail
 };
