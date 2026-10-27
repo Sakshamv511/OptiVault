@@ -1,46 +1,56 @@
 const { sendEmail: sendViaNodemailer } = require('../config/nodemailer');
 
 /**
- * Sends transactional email using Resend's HTTPS API,
+ * Sends transactional email using SendGrid's HTTPS API,
  * with fallback to Nodemailer (SMTP / Ethereal) for local testing.
  */
 const sendMail = async ({ to, subject, html }) => {
-  const resendApiKey = process.env.RESEND_API_KEY;
+  const sendgridApiKey = process.env.SENDGRID_API_KEY;
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'optivault601@gmail.com';
   const senderName = process.env.EMAIL_SENDER_NAME || 'OptiVault Platform';
   const recipients = Array.isArray(to) ? to : [String(to).trim()];
 
-  // 1. Send via Resend HTTPS API (ideal for Render and cloud production)
-  if (resendApiKey) {
+  // 1. Send via SendGrid HTTPS API (Works on Render, sends to ANY email worldwide)
+  if (sendgridApiKey) {
     try {
-      const fromAddress = process.env.RESEND_FROM || `${senderName} <onboarding@resend.dev>`;
-
-      const response = await fetch('https://api.resend.com/emails', {
+      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
+          'Authorization': `Bearer ${sendgridApiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: fromAddress,
-          to: recipients,
+          personalizations: [
+            {
+              to: recipients.map(email => ({ email: String(email).trim() }))
+            }
+          ],
+          from: {
+            email: fromEmail,
+            name: senderName
+          },
           subject,
-          html
+          content: [
+            {
+              type: 'text/html',
+              value: html
+            }
+          ]
         })
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.id) {
-        console.log(`[Email Delivered via Resend] To: ${recipients.join(', ')} | ID: ${data.id}`);
+      if (response.status === 202 || response.ok) {
+        console.log(`[Email Delivered via SendGrid] To: ${recipients.join(', ')} | Status: 202 Accepted`);
         return {
           success: true,
-          messageId: data.id
+          messageId: `sendgrid-${Date.now()}`
         };
       } else {
-        console.warn(`[Resend Warning] ${data.message || 'Request failed'}. Attempting fallback...`);
+        const errText = await response.text();
+        console.warn(`[SendGrid Warning] ${response.status}: ${errText}. Attempting fallback...`);
       }
-    } catch (resendErr) {
-      console.warn(`[Resend Error] ${resendErr.message}. Attempting fallback...`);
+    } catch (sgErr) {
+      console.warn(`[SendGrid Error] ${sgErr.message}. Attempting fallback...`);
     }
   }
 

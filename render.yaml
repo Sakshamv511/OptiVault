@@ -26,7 +26,9 @@ services:
         value: https://optivault-warehouse.vercel.app
       - key: PLATFORM_ADMIN_EMAIL
         value: admin@optivault.internal
-      - key: RESEND_API_KEY
+      - key: SENDGRID_API_KEY
         sync: false
+      - key: SENDGRID_FROM_EMAIL
+        value: optivault601@gmail.com
       - key: EMAIL_SENDER_NAME
         value: OptiVault Platform
