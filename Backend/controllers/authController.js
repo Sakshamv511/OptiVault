@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
-const Company = require('../../models/Company');
+const Company = require('../models/Company');
 const { sendRegistrationReceivedEmail } = require('../../utils/emailService');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
