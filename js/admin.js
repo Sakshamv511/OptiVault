@@ -256,7 +256,10 @@ function renderSites(){
           localStorage.setItem(FLOOR_KEYS.unlocked, id);
         } catch(e){}
       }
-      window.location.href = 'warehouse-floor.html';
+      try {
+        sessionStorage.setItem('optivault-admin-view', 'true');
+      } catch(e){}
+      window.location.href = 'warehouse-floor.html?view=admin';
     });
   });
 

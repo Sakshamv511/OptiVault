@@ -36,18 +36,21 @@
      ================================================================= -->
 <nav class="mainnav">
   <div class="nav-inner">
-    <button class="navlink on" type="button" data-pane="floor">
+    <button class="navlink on" type="button" data-pane="floor" id="navLinkFloor">
       <span class="nav-ico">▦</span> FLOOR
       <span class="nav-badge" id="navPendingCount" hidden>0</span>
     </button>
-    <button class="navlink" type="button" data-pane="stock">
+    <button class="navlink" type="button" data-pane="threed" id="navLink3D">
+      <span class="nav-ico">🧊</span> 3D VIEW
+    </button>
+    <button class="navlink" type="button" data-pane="stock" id="navLinkStock">
       <span class="nav-ico">⇅</span> STOCK IN / OUT
     </button>
-    <button class="navlink" type="button" data-pane="optimizer">
+    <button class="navlink" type="button" data-pane="optimizer" id="navLinkOptimizer">
       <span class="nav-ico">◈</span> OPTIMIZER
       <span class="nav-badge" id="navFlagCount" hidden>0</span>
     </button>
-    <button class="navlink" type="button" data-pane="reports">
+    <button class="navlink" type="button" data-pane="reports" id="navLinkReports">
       <span class="nav-ico">▤</span> REPORTS
     </button>
   </div>
@@ -113,6 +116,61 @@
       <h4>⚠️ Waiting for space</h4>
       <div class="hint">These units did not fit anywhere. Remove stock to free a slot and they are placed automatically.</div>
       <div id="pendingList"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       PANE 3D — 3D SPATIAL VIEW
+       ============================================================ -->
+  <section class="pane" data-pane-body="threed">
+    <div class="pane-head">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h1>3D Spatial View</h1>
+          <div class="sub">360° interactive isometric spatial model mapped to physical rack positions and slot occupancy.</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <a class="btn" href="warehouse-3d.html" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:#0284c7; color:#fff; border-color:#0284c7; padding:7px 12px; font-weight:600; border-radius:6px; font-size:11.5px;" title="Open standalone full-window 3D view in a new tab">
+            🧊 Full Window 3D ↗
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden; border-radius:10px; background:#0c0e12; border:1px solid #1e293b;">
+      <div class="stage-controls">
+        <div class="ctrl-group">
+          <button class="btn-3d" id="btnAutoRotate360" type="button" title="Toggle continuous 360° turntable spin">
+            <span class="spin-ico">⟳</span> Auto 360°
+          </button>
+          <button class="btn-3d active" id="btnReset3D" type="button" title="Reset to default isometric angle">Isometric</button>
+          <button class="btn-3d" id="btnTop3D" type="button" title="Top-down bird's eye view">Top</button>
+          <button class="btn-3d" id="btnSide3D" type="button" title="Side profile view">Side</button>
+          <button class="btn-3d" id="btnFront3D" type="button" title="Front elevation view">Front</button>
+        </div>
+        <div class="ctrl-group slider-group">
+          <label for="rot360Slider">360° Spin:</label>
+          <input type="range" id="rot360Slider" min="0" max="360" value="328" step="1">
+          <span id="rot360Val">328°</span>
+        </div>
+        <div class="ctrl-group zoom-group">
+          <button class="btn-3d" id="btnZoomOut" type="button" title="Zoom out">−</button>
+          <span id="zoomLevel">100%</span>
+          <button class="btn-3d" id="btnZoomIn" type="button" title="Zoom in">+</button>
+        </div>
+      </div>
+      <div class="stage-wrap" id="stageWrap3D" style="min-height:500px;">
+        <div class="stage" id="stage3d"></div>
+        <div class="rack-key" id="rackKey"></div>
+        <div class="dock-note">360° SPATIAL VIEW · DRAG MOUSE OR SLIDER TO ROTATE · RACKS ORDERED BY DISTANCE FROM DOCK</div>
+      </div>
+      <div style="background:#0f172a; padding:12px 20px; border-top:1px solid #1e293b;">
+        <div class="stage-legend">
+          <span><i style="background:var(--redlt)"></i>under 40%</span>
+          <span><i style="background:var(--mid)"></i>40–85%</span>
+          <span><i style="background:var(--red)"></i>over 85%</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -283,57 +341,6 @@
 
 </main>
 
-<!-- ================= 3D MODAL ================= -->
-<div class="modal" id="modal3d">
-  <div class="modal-panel">
-    <div class="modal-head">
-      <div>
-        <h3>Warehouse in 3D</h3>
-        <div class="m-sub">Racks left to right by distance from the dock. Bar height inside each slot is its real fill. Drag anywhere or use 360° controls to spin.</div>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <a class="btn tiny" href="warehouse-3d.html" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:5px; background:#0f172a; color:#38bdf8; border:1px solid #0284c7; font-weight:600;" title="Open full-screen 3D view in a new browser tab">
-          ↗ Open in new tab
-        </a>
-        <button class="btn" data-close>Close</button>
-      </div>
-    </div>
-    <div class="stage-controls">
-      <div class="ctrl-group">
-        <button class="btn-3d" id="btnAutoRotate360" type="button" title="Toggle continuous 360° turntable spin">
-          <span class="spin-ico">⟳</span> Auto 360°
-        </button>
-        <button class="btn-3d active" id="btnReset3D" type="button" title="Reset to default isometric angle">Isometric</button>
-        <button class="btn-3d" id="btnTop3D" type="button" title="Top-down bird's eye view">Top</button>
-        <button class="btn-3d" id="btnSide3D" type="button" title="Side profile view">Side</button>
-        <button class="btn-3d" id="btnFront3D" type="button" title="Front elevation view">Front</button>
-      </div>
-      <div class="ctrl-group slider-group">
-        <label for="rot360Slider">360° Spin:</label>
-        <input type="range" id="rot360Slider" min="0" max="360" value="328" step="1">
-        <span id="rot360Val">328°</span>
-      </div>
-      <div class="ctrl-group zoom-group">
-        <button class="btn-3d" id="btnZoomOut" type="button" title="Zoom out">−</button>
-        <span id="zoomLevel">100%</span>
-        <button class="btn-3d" id="btnZoomIn" type="button" title="Zoom in">+</button>
-      </div>
-    </div>
-    <div class="stage-wrap">
-      <div class="stage" id="stage3d"></div>
-      <div class="rack-key" id="rackKey"></div>
-      <div class="dock-note">360° SPATIAL VIEW · DRAG MOUSE OR SLIDER TO ROTATE · RACKS ORDERED BY DISTANCE FROM DOCK</div>
-    </div>
-    <div class="modal-body">
-      <div class="stage-legend">
-        <span><i style="background:var(--redlt)"></i>under 40%</span>
-        <span><i style="background:var(--mid)"></i>40–85%</span>
-        <span><i style="background:var(--red)"></i>over 85%</span>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ================= SLOT INSPECTION & TRANSFER MODAL ================= -->
 <div class="modal" id="modalSlotInspector">
   <div class="modal-panel inspector-panel">
@@ -387,6 +394,12 @@
         <div id="inspItemList" class="insp-item-list">
           <!-- Populated by JS -->
         </div>
+      </div>
+
+      <!-- Admin Read-Only Notice -->
+      <div id="inspAdminNotice" class="insp-admin-notice" style="display:none;">
+        <span style="font-size:16px;">🔒</span>
+        <span><strong>Enterprise Admin View:</strong> Live slot telemetry and contents are read-only. Stock allocation, relocation, and picking are restricted to floor supervisors.</span>
       </div>
 
       <!-- Stock Transfer & Action Drawer -->

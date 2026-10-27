@@ -301,6 +301,9 @@ function checkPasscode(){
   // Correct: remember which warehouse is open, then go to the floor.
   localStorage.setItem(FLOOR_KEYS.active, chosenWarehouse.id);
   localStorage.setItem(FLOOR_KEYS.unlocked, chosenWarehouse.id);
+  try {
+    sessionStorage.removeItem('optivault-admin-view');
+  } catch(e){}
 
   const button = document.getElementById('passSubmit');
   if(button){

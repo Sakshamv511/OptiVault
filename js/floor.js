@@ -1153,6 +1153,9 @@ function renderAll(){
   renderPending();
   renderActivity();
   renderAllocationReport();
+  if(activePane === 'threed'){
+    render3D();
+  }
 }
 
 function renderHeader(){
@@ -1822,6 +1825,97 @@ function renderRackKey(){
    8. EVENTS
    ===================================================================== */
 
+function isCompanyAdminView(){
+  const urlParams = new URLSearchParams(window.location.search);
+  if(urlParams.get('view') === 'admin' || urlParams.get('role') === 'company-admin'){
+    try { sessionStorage.setItem('optivault-admin-view', 'true'); } catch(e){}
+    return true;
+  }
+  if(urlParams.get('view') === 'supervisor'){
+    try { sessionStorage.removeItem('optivault-admin-view'); } catch(e){}
+    return false;
+  }
+  try {
+    const session = JSON.parse(localStorage.getItem(FLOOR_KEYS.session));
+    if(session && session.role === 'supervisor'){
+      try { sessionStorage.removeItem('optivault-admin-view'); } catch(e){}
+      return false;
+    }
+    if(session && (session.role === 'company-admin' || session.role === 'admin')){
+      return true;
+    }
+  } catch(e){}
+  try {
+    if(sessionStorage.getItem('optivault-admin-view') === 'true') return true;
+  } catch(e){}
+  return false;
+}
+
+function applyAdminViewRestrictions(){
+  if(!isCompanyAdminView()) return;
+
+  // Add CSS restriction class to body
+  document.body.classList.add('admin-view');
+
+  // If activePane is restricted, force to 'floor'
+  if(activePane !== 'floor' && activePane !== 'threed'){
+    activePane = 'floor';
+  }
+
+  // Update header action: change warehouse -> Return to Admin Ledger
+  const changeBtn = document.getElementById('changeWarehouse');
+  if(changeBtn){
+    changeBtn.innerHTML = '← Facility Ledger';
+    changeBtn.title = 'Return to Enterprise Facility Ledger';
+  }
+
+  // Hide reset floor button
+  const resetBtn = document.getElementById('resetFloor');
+  if(resetBtn){
+    resetBtn.style.display = 'none';
+  }
+
+  // Hide non-admin tabs
+  ['stock', 'optimizer', 'reports'].forEach(pane => {
+    const navBtn = document.querySelector(`[data-pane="${pane}"]`);
+    if(navBtn) navBtn.style.display = 'none';
+    const bodyPane = document.querySelector(`[data-pane-body="${pane}"]`);
+    if(bodyPane) bodyPane.style.display = 'none';
+  });
+
+  // Hide optimizer stats card
+  const alertsCard = document.getElementById('statAlertsCard');
+  if(alertsCard){
+    alertsCard.style.display = 'none';
+  }
+
+  // Add admin view indicator badge to header
+  const hright = document.querySelector('.hright');
+  if(hright && !document.getElementById('adminViewBadge')){
+    const badge = document.createElement('span');
+    badge.id = 'adminViewBadge';
+    badge.className = 'admin-badge';
+    badge.innerHTML = '🔒 ADMIN VIEW (READ ONLY)';
+    hright.insertBefore(badge, hright.firstChild);
+  }
+
+  // Slot Inspector modal: hide transfer box and show read-only notice
+  const transferBox = document.getElementById('inspTransferBox');
+  if(transferBox){
+    transferBox.style.display = 'none';
+  }
+  const adminNotice = document.getElementById('inspAdminNotice');
+  if(adminNotice){
+    adminNotice.style.display = 'flex';
+  }
+
+  // Update demo banner if visible
+  const demoBanner = document.getElementById('demoBanner');
+  if(demoBanner && !demoBanner.hidden){
+    demoBanner.innerHTML = 'Viewing live floor in <b>Enterprise Admin mode</b> (View-only). Stock editing is restricted to on-site supervisors. <a href="company-dashboard.html" style="margin-left:8px; font-weight:600; color:inherit; text-decoration:underline;">← Return to Facility Ledger</a>';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async function(){
   // floor.js is also loaded by the warehouse picker and the company
   // dashboard, neither of which has a rack list. Nothing below applies
@@ -1837,6 +1931,7 @@ document.addEventListener('DOMContentLoaded', async function(){
 
   if(!guardWarehouseAccess()) return;
   guardSession();
+  applyAdminViewRestrictions();
 
   WAREHOUSE = loadWarehouse(activeWarehouseId());
   renderAll();
@@ -1850,6 +1945,10 @@ document.addEventListener('DOMContentLoaded', async function(){
   initSlotInspector();
   initReset();
   initChangeWarehouse();
+
+  if(activePane === 'threed'){
+    render3D();
+  }
 });
 
 /* ---------------------------------------------------------------
@@ -1876,6 +1975,10 @@ function initTabs(){
 }
 
 function showPane(name){
+  if(isCompanyAdminView() && (name === 'stock' || name === 'optimizer' || name === 'reports')){
+    name = 'floor';
+  }
+
   activePane = name;
 
   document.querySelectorAll('[data-pane]').forEach(link => {
@@ -1884,6 +1987,12 @@ function showPane(name){
   document.querySelectorAll('[data-pane-body]').forEach(pane => {
     pane.classList.toggle('on', pane.dataset.paneBody === name);
   });
+
+  if(name === 'threed'){
+    render3D();
+  } else {
+    if(typeof stopAutoRotate360 === 'function') stopAutoRotate360();
+  }
 
   // The search box only filters the rack list, so it belongs to the
   // floor view and is hidden everywhere else.
@@ -1898,8 +2007,12 @@ function showPane(name){
 function guardWarehouseAccess(){
   const id = activeWarehouseId();
   const unlocked = localStorage.getItem(FLOOR_KEYS.unlocked);
-  if(id && unlocked === id && warehouseInfo(id)){
+  if(id && (unlocked === id || isCompanyAdminView()) && warehouseInfo(id)){
     return true;
+  }
+  if(isCompanyAdminView()){
+    window.location.href = 'company-dashboard.html';
+    return false;
   }
   window.location.href = 'warehouse-select.html';
   return false;
@@ -1909,6 +2022,10 @@ function initChangeWarehouse(){
   const button = document.getElementById('changeWarehouse');
   if(!button) return;
   button.addEventListener('click', function(){
+    if(isCompanyAdminView()){
+      window.location.href = 'company-dashboard.html';
+      return;
+    }
     localStorage.removeItem(FLOOR_KEYS.unlocked);
     localStorage.removeItem(FLOOR_KEYS.active);
     window.location.href = 'warehouse-select.html';
@@ -1929,12 +2046,16 @@ function guardSession(){
   const who = document.getElementById('whoAmI');
 
   if(session && session.company){
-    if(who) who.textContent = initialsOf(session.company);
-    if(who) who.title = `${session.company} — sign out`;
+    if(who){
+      who.textContent = initialsOf(session.company);
+      who.title = isCompanyAdminView()
+        ? `${session.company} (Company Admin — View Only) — Return to Ledger`
+        : `${session.company} — sign out`;
+    }
     if(banner) banner.hidden = true;
   }else{
     if(banner) banner.hidden = false;
-    if(who) who.textContent = '—';
+    if(who) who.textContent = isCompanyAdminView() ? 'AD' : '—';
   }
 }
 
@@ -1953,6 +2074,11 @@ function initAddForm(){
 
   form.addEventListener('submit', function(event){
     event.preventDefault();
+
+    if(isCompanyAdminView()){
+      showResult('bad', 'Action Restricted', 'Stock putaway and allocation are restricted to floor supervisors.');
+      return;
+    }
 
     const rawSku = value('inSku');
     const entry = {
@@ -2075,6 +2201,11 @@ function initRemoveForm(){
   form.addEventListener('submit', function(event){
     event.preventDefault();
 
+    if(isCompanyAdminView()){
+      showResult('bad', 'Action Restricted', 'Stock picking and deallocation are restricted to floor supervisors.');
+      return;
+    }
+
     const slotId = value('outSlot');
     const sku = value('outSku');
     const qty = Number(value('outQty'));
@@ -2186,10 +2317,10 @@ function initModals(){
 
   ['open3d', 'open3dHeader'].forEach(function(id){
     const button = document.getElementById(id);
-    if(button && modal3d){
-      button.addEventListener('click', function(){
-        render3D();
-        modal3d.classList.add('on');
+    if(button){
+      button.addEventListener('click', function(e){
+        e.preventDefault();
+        showPane('threed');
       });
     }
   });
@@ -2220,6 +2351,10 @@ function initModals(){
   const signOut = document.getElementById('whoAmI');
   if(signOut){
     signOut.addEventListener('click', function(){
+      if(isCompanyAdminView()){
+        window.location.href = 'company-dashboard.html';
+        return;
+      }
       localStorage.removeItem(FLOOR_KEYS.session);
       window.location.href = 'signin.html';
     });
@@ -2469,6 +2604,10 @@ function initReset(){
   const button = document.getElementById('resetFloor');
   if(!button) return;
   button.addEventListener('click', async function(){
+    if(isCompanyAdminView()){
+      alert('Floor reset is restricted in Company Admin view-only mode.');
+      return;
+    }
     try{
       const resetUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/reset') : '/api/warehouse/reset';
       await fetch(resetUrl, {
@@ -2662,6 +2801,16 @@ function openSlotInspector(slotId){
       allSlots.map(s => `<option value="${s.id}">${s.id} (${s.rackName}) · ${s.freeL} L free / ${s.freeKg} kg free</option>`).join('');
   }
 
+  // Adjust display for admin view vs supervisor
+  const adminNotice = document.getElementById('inspAdminNotice');
+  if(isCompanyAdminView()){
+    if(transferBox) transferBox.style.display = 'none';
+    if(adminNotice) adminNotice.style.display = 'flex';
+  } else {
+    if(transferBox) transferBox.style.display = '';
+    if(adminNotice) adminNotice.style.display = 'none';
+  }
+
   // Show Modal
   modal.classList.add('on');
 }
@@ -2693,6 +2842,10 @@ function initSlotInspector(){
   if(transferForm){
     transferForm.addEventListener('submit', async function(e){
       e.preventDefault();
+      if(isCompanyAdminView()){
+        showTransferAlert('bad', 'Stock operations are restricted to on-site supervisors.');
+        return;
+      }
       if(!currentInspectSlotId) return;
 
       const sku = (document.getElementById('transSkuSelect') || {}).value;
@@ -2761,6 +2914,10 @@ function initSlotInspector(){
   // Quick Pick Button
   if(btnQuickPick){
     btnQuickPick.addEventListener('click', async function(){
+      if(isCompanyAdminView()){
+        showTransferAlert('bad', 'Stock picking is restricted to on-site supervisors.');
+        return;
+      }
       if(!currentInspectSlotId) return;
       const sku = (document.getElementById('transSkuSelect') || {}).value;
       const qty = Number((document.getElementById('transQty') || {}).value) || 1;

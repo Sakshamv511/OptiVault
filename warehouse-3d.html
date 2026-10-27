@@ -626,6 +626,17 @@ document.addEventListener('DOMContentLoaded', async function(){
   if(nameEl) nameEl.textContent = (info ? info.name : WAREHOUSE.name);
   if(badgeEl) badgeEl.textContent = activeId;
 
+  // Preserve admin view mode on return link if arriving from company admin
+  const returnLink = document.querySelector('a[href="warehouse-floor.html"]');
+  if(returnLink){
+    const isAdm = (typeof isCompanyAdminView === 'function' && isCompanyAdminView()) ||
+                  sessionStorage.getItem('optivault-admin-view') === 'true' ||
+                  new URLSearchParams(window.location.search).get('view') === 'admin';
+    if(isAdm){
+      returnLink.href = 'warehouse-floor.html?view=admin';
+    }
+  }
+
   // Render Initial Stats & 3D Model
   updateHeaderStats();
   render3D();
