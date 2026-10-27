@@ -5,6 +5,7 @@ services:
   - type: web
     name: optivault-backend
     runtime: node
+    rootDir: Backend
     plan: free
     region: oregon
     buildCommand: npm install
