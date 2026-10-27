@@ -177,7 +177,7 @@ function initSignInForm(){
 
   applyRole(role);
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     let valid = true;
@@ -451,7 +451,7 @@ function initSignUpForm(){
   const fields = [companyName, contactName, workEmail, warehouses, password, confirm];
 
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     let valid = true;
@@ -492,63 +492,46 @@ function initSignUpForm(){
       return;
     }
 
-    // already registered?
-    const companies = getCompanies();
     const emailValue = workEmail.value.trim().toLowerCase();
-    const taken = companies.some(
-      item => item.email.toLowerCase() === emailValue
-    );
-
-    if(taken){
-      workEmail.classList.add('field-error');
-      showError(errorBox, 'A company is already registered with that email address.');
-      workEmail.focus();
-      return;
-    }
-
     btn.disabled = true;
     btnText.textContent = 'SENDING…';
 
-    const ref = makeReference();
-
-    // 1. Immediately save to LocalStorage so existing sync and tabs work
-    companies.push({
-      name: companyName.value.trim(),
-      contact: contactName.value.trim(),
-      email: emailValue,
-      password: password.value,
-      requestedWarehouses: parseInt(warehouses.value, 10),
-      status: 'pending',
-      reference: ref,
-      warehouses: []
-    });
-    saveCompanies(companies);
-
-    // 2. Dispatch to backend API in background to save in MongoDB and send SMTP email
     const regUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/register') : '/api/auth/register';
-    fetch(regUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        companyName: companyName.value.trim(),
-        contactName: contactName.value.trim(),
-        workEmail: emailValue,
-        warehouseCount: parseInt(warehouses.value, 10),
-        password: password.value
-      })
-    }).then(r => r.json()).then(data => {
-      if(data.success && data.reference){
-        const refSlot = document.getElementById('successRef');
-        if(refSlot) refSlot.textContent = data.reference;
-      }
-    }).catch(err => {
-      console.warn('Backend API registration note:', err);
-    });
 
-    // 3. Play the success screen box-clearing animation after 700ms
-    setTimeout(() => {
+    try {
+      const res = await fetch(regUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: companyName.value.trim(),
+          contactName: contactName.value.trim(),
+          workEmail: emailValue,
+          warehouseCount: parseInt(warehouses.value, 10),
+          password: password.value
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        btn.disabled = false;
+        btnText.textContent = 'REQUEST WORKSPACE';
+        workEmail.classList.add('field-error');
+        showError(errorBox, data.message || 'Registration could not be completed. Please try again.');
+        workEmail.focus();
+        return;
+      }
+
+      const ref = data.reference || ('OV-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000));
+      const refSlot = document.getElementById('successRef');
+      if (refSlot) refSlot.textContent = ref;
+
       playSuccessScreen(companyName.value.trim(), ref);
-    }, 700);
+    } catch (netErr) {
+      btn.disabled = false;
+      btnText.textContent = 'REQUEST WORKSPACE';
+      showError(errorBox, 'Could not connect to the backend server. Please check your connection.');
+    }
   });
 
   fields.forEach(field => {

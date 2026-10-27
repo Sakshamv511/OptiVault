@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async function(){
 
 async function syncCompaniesFromBackend(){
   try {
+    try { localStorage.removeItem('optivault-companies'); } catch(e){}
     const listUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/admin/companies') : '/api/admin/companies';
     const res = await fetch(listUrl);
     const data = await res.json();
@@ -303,15 +304,19 @@ function renderCompanyQueue(){
           body: JSON.stringify({ email, decision: 'approved' })
         });
         const data = await res.json();
-        if(data.previewUrl) {
-          console.log('[OptiVault SMTP Email Preview]', data.previewUrl);
+        if (res.ok && data.success) {
+          await syncCompaniesFromBackend();
+          return;
+        } else {
+          alert('Approval error: ' + (data.message || 'Server error occurred.'));
+          button.disabled = false;
+          button.textContent = 'Approve account';
         }
       } catch(err) {
-        console.warn('Backend decide API error, using local fallback:', err);
+        alert('Network error connecting to backend: ' + err.message);
+        button.disabled = false;
+        button.textContent = 'Approve account';
       }
-
-      decideCompany(email, 'approved');
-      renderConsole();
     });
   });
 
@@ -329,15 +334,19 @@ function renderCompanyQueue(){
           body: JSON.stringify({ email, decision: 'rejected' })
         });
         const data = await res.json();
-        if(data.previewUrl) {
-          console.log('[OptiVault SMTP Email Preview]', data.previewUrl);
+        if (res.ok && data.success) {
+          await syncCompaniesFromBackend();
+          return;
+        } else {
+          alert('Decline error: ' + (data.message || 'Server error occurred.'));
+          button.disabled = false;
+          button.textContent = 'Decline';
         }
       } catch(err) {
-        console.warn('Backend decide API error, using local fallback:', err);
+        alert('Network error connecting to backend: ' + err.message);
+        button.disabled = false;
+        button.textContent = 'Decline';
       }
-
-      decideCompany(email, 'rejected');
-      renderConsole();
     });
   });
 }

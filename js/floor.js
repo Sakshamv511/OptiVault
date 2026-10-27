@@ -1110,31 +1110,25 @@ function rejectDeleteRequest(ref){
    the one who lets them in.
    --------------------------------------------------------------- */
 
+window._OPTIVAULT_COMPANIES_CACHE = [];
+
 function loadCompanyAccounts(){
-  try{
-    const raw = localStorage.getItem('optivault-companies');
-    return raw ? JSON.parse(raw) : [];
-  }catch(err){
-    console.warn('Could not read company accounts:', err);
-    return [];
-  }
+  return window._OPTIVAULT_COMPANIES_CACHE || [];
 }
 
 function saveCompanyAccounts(list){
-  try{
-    localStorage.setItem('optivault-companies', JSON.stringify(list));
-  }catch(err){
-    console.warn('Could not save company accounts:', err);
-  }
+  window._OPTIVAULT_COMPANIES_CACHE = Array.isArray(list) ? list : [];
+  try {
+    localStorage.removeItem('optivault-companies');
+  } catch(e){}
 }
 
 function decideCompany(email, decision){
   const list = loadCompanyAccounts();
-  const found = list.find(entry => entry.email === email);
+  const found = list.find(entry => (entry.email || '').toLowerCase() === (email || '').toLowerCase());
   if(!found) return null;
-  found.status = decision;             // 'approved' or 'rejected'
+  found.status = decision;
   found.decidedAt = Date.now();
-  saveCompanyAccounts(list);
   return found;
 }
 
