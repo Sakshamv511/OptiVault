@@ -1,6 +1,6 @@
 # OPTIVAULT — Warehouse Management & Slot Allocation System
 
-> **Frontend Project** · HTML5 · CSS3 · Vanilla JavaScript · Bootstrap 5 · LocalStorage
+> **Full-Stack Project** · Node.js · Express 5 · MongoDB Atlas · Mongoose · JWT · Nodemailer · Vanilla JavaScript · HTML5 · CSS3
 
 **Live Demo:** [Open OptiVault](https://optivault-warehouse.vercel.app/)
 
@@ -10,28 +10,26 @@
 
 Companies running multiple warehouses need to place incoming stock efficiently, track occupancy across sites in real time, and make sure different types of users — company admins, warehouse supervisors, and the platform team that runs the whole system — only see and touch what's relevant to their role.
 
-OptiVault is a full frontend simulation of such a system. It covers four connected areas:
+OptiVault is an end-to-end warehouse management and slot optimization platform covering four connected areas:
 
-- **Authentication & onboarding** — role-based sign in and company registration
-- **Warehouse floor** — a live slot map with an automatic allocation engine, run by supervisors
-- **Company ledger** — a read-only, company-wide oversight view for company admins
-- **Platform console** — an internal tool for the OptiVault team to approve companies and warehouses
+- **Authentication & onboarding** — role-based sign in and company registration with MongoDB persistence and JWT security
+- **Warehouse floor** — a live slot map with an automatic allocation engine and real-time MongoDB synchronization, run by supervisors
+- **Company ledger** — a company-wide oversight and requisition dashboard for company admins
+- **Platform console** — an internal governance tool for the OptiVault team to approve, reject, or delete client companies and warehouses
 
 ---
 
-## 2. Proposed Solution
+## 2. Solution Overview
 
-OptiVault is built entirely with **HTML, CSS and Vanilla JavaScript**, using the browser's LocalStorage as its data layer instead of a backend or database. It demonstrates:
+OptiVault pairs a high-performance **Node.js & Express REST API** connected to **MongoDB Atlas** with a responsive frontend built in **HTML, CSS and Vanilla JavaScript**. It features:
 
-- Role-based authentication and company registration with an approval workflow
-- Client-side form validation across every form in the app
-- A first-fit-style slot-allocation algorithm driven by item dimensions, weight, fragility, and pick velocity
-- A live optimizer that flags rack pressure, overfill, waiting stock, and travel-time inefficiency
-- A company-wide ledger that reads the same live data suppliers write to — no separate copy
-- An internal approval console that can actually build a warehouse's rack plan and issue a passcode
-- Cross-tab live sync, using the browser's `storage` event, so a change made on one page shows up on another without a manual refresh
-
-The frontend can operate as a client-side demonstration, while a separate Node.js/Express backend API is documented in Section 31. The backend API reference lists endpoints for authentication, platform administration, warehouse data, and stock operations.
+- Role-based authentication (`company-admin`, `supervisor`, `platform-admin`) backed by bcrypt password hashing and JWT
+- Transactional email dispatch via Nodemailer / SMTP for account approvals, slot assignments, and rejections
+- Cloud database persistence with Mongoose models for companies, warehouses, slots, inventory items, and allocation logs
+- A first-fit-decreasing slot allocation algorithm driven by item dimensions, weight, fragility, and pick velocity
+- An optimizer flagging rack pressure, overfill, waiting stock, and travel-time inefficiencies
+- Platform administration console with the ability to approve accounts, auto-provision rack grids, or delete pending/declined records
+- Real-time client-to-cloud synchronization keeping warehouse floors updated without manual reloading
 
 ---
 
@@ -84,21 +82,154 @@ The frontend can operate as a client-side demonstration, while a separate Node.j
 
 | Layer | Technology |
 |---|---|
-| Structure | HTML5 |
-| Styling | CSS3 |
-| Logic | Vanilla JavaScript (ES6+) |
-| UI Framework | Bootstrap 5.3.3 (auth pages only) |
-| Fonts | Google Fonts — Space Grotesk & Inter |
-| Client-side Storage | Browser LocalStorage (frontend demo state) |
-| Data Format | JavaScript Objects / JSON |
-| Browser APIs | DOM API, URLSearchParams, `storage` event, `requestAnimationFrame`, `performance.now()` |
-| Version Control | Git / GitHub |
-| Frontend Hosting | Vercel / Railway (deployment links above) |
-| Backend API | Node.js · Express · MongoDB (hosted on Render) |
+| **Backend Runtime** | Node.js (v18+) |
+| **Backend Framework** | Express 5 |
+| **Database** | MongoDB Atlas / Mongoose ODM |
+| **Authentication & Security** | JSON Web Tokens (`jsonwebtoken`), `bcryptjs`, `google-auth-library` |
+| **Email & Notifications** | Nodemailer (SMTP with Ethereal / production SMTP) |
+| **Frontend Structure** | HTML5 Semantic Markup |
+| **Frontend Styling** | CSS3 (Custom design system + CSS variables) |
+| **Frontend Logic** | Vanilla JavaScript (ES6+ modular code) |
+| **UI Framework** | Bootstrap 5.3.3 (auth pages only) |
+| **Fonts** | Google Fonts — Space Grotesk & Inter |
+| **Browser APIs** | Fetch API, DOM API, URLSearchParams, `storage` event, `requestAnimationFrame`, `performance.now()` |
+| **Version Control** | Git / GitHub |
+| **Deployment** | Vercel (Frontend) · Render / Railway (Backend) |
 
 ---
 
-## 5. Architecture
+## 5. Backend REST API Endpoints
+
+The OptiVault server exposes **23 RESTful API endpoints** across 4 functional domains. All JSON responses adhere to a consistent `{ success: boolean, ... }` envelope format.
+
+| Domain | Base Path | Endpoints | Purpose |
+|---|---|:---:|---|
+| **System & Health** | `/` | 2 | Root service catalog & MongoDB automated health check |
+| **Authentication** | `/api/auth` | 5 | Company registration, JWT login, Google OAuth SSO & profile |
+| **Platform Administration** | `/api/admin` | 6 | Company approval queue, slot provisioning, deletions & stats |
+| **Warehouse Operations** | `/api/warehouse` | 10 | CE2 slot allocation algorithm, inventory transfers, removals & state sync |
+| **Total** | | **23** | |
+
+---
+
+### 5.1 System & Health
+
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `GET` | `/api` | Root status endpoint returning service metadata and catalog. | Public |
+| `GET` | `/api/health` | Automated health check reporting uptime and MongoDB connection state (`connected`, `connecting`, `disconnected`). | Public |
+
+```bash
+# Example Health Check Response
+curl http://localhost:5001/api/health
+```
+```json
+{
+  "status": "healthy",
+  "service": "OptiVault Backend",
+  "timestamp": "2026-10-27T15:00:00.000Z",
+  "uptimeSeconds": 1420,
+  "database": "connected"
+}
+```
+
+---
+
+### 5.2 Authentication (`/api/auth`)
+
+Manages client company registration, role-based login, Google Single Sign-On, and JWT validation.
+
+| Method | Endpoint | Description | Request Body / Parameters | Access |
+|---|---|---|---|---|
+| `POST` | `/api/auth/register` | Register a new client company account with `pending` status. | `{ companyName, contactName, workEmail, warehouseCount, password }` | Public |
+| `POST` | `/api/auth/login` | Authenticate `company-admin`, `supervisor`, or `platform-admin`; returns JWT. | `{ email, password, role }` | Public |
+| `POST` | `/api/auth/google` | Google OAuth SSO token verification and automatic onboarding. | `{ credential, role }` | Public |
+| `GET` | `/api/auth/google/client-id` | Retrieve public Google OAuth client ID for frontend button initialization. | *None* | Public |
+| `GET` | `/api/auth/me` | Fetch active user profile and authorized company details. | *Bearer Token in Authorization Header* | Private (JWT) |
+
+```bash
+# Login Example
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ops@harborbell.com",
+  "password": "warehouse123",
+  "role": "company-admin"
+}
+```
+
+---
+
+### 5.3 Platform Administration & Governance (`/api/admin`)
+
+Used by the OptiVault Platform Admin console ([`platform-admin.html`](file:///Users/karun/Desktop/untitled%20folder/OptiVault/platform-admin.html)) to govern company registrations, auto-provision facility rack maps, and maintain system queues.
+
+| Method | Endpoint | Description | Request Body / Parameters | Access |
+|---|---|---|---|---|
+| `GET` | `/api/admin/companies` | List all client company registrations across `pending`, `approved`, and `rejected` states. | *None* | Platform Admin |
+| `POST` | `/api/admin/companies/decide` | Approve or decline a company registration. Approving auto-builds 32-slot rack maps and dispatches an SMTP notification email. | `{ email, decision: "approved"\|"rejected", reason? }` | Platform Admin |
+| `PUT` | `/api/admin/companies/:identifier/decide` | Alternative path parameter endpoint to approve or reject a company. | Path `:identifier` (ID or email), Body `{ decision, reason? }` | Platform Admin |
+| `DELETE` | `/api/admin/companies/:identifier` | Permanently delete a pending or rejected company registration. | Path `:identifier` (MongoDB `_id` or email) | Platform Admin |
+| `DELETE` | `/api/admin/companies` | Alternative delete endpoint accepting identifier in request body. | `{ identifier }` or `{ email }` | Platform Admin |
+| `GET` | `/api/admin/stats` | Summary statistics of total, pending, and approved client companies. | *None* | Platform Admin |
+
+```bash
+# Company Approval Example
+POST /api/admin/companies/decide
+Content-Type: application/json
+
+{
+  "email": "ops@harborbell.com",
+  "decision": "approved"
+}
+```
+
+---
+
+### 5.4 Warehouse Operations & Optimization Engine (`/api/warehouse`)
+
+Executes inventory allocation algorithms, slot management, stock transfers, and warehouse state synchronization.
+
+| Method | Endpoint | Description | Request Body / Parameters | Access |
+|---|---|---|---|---|
+| `POST` | `/api/warehouse/allocate` | **CE2 Core Packing Algorithm**: Inbounds inventory items, evaluates dimensions, weight, fragility, and pick velocity, and allocates optimal slots. | `{ warehouseId, items: [{ sku, name, width, height, length, weight, quantity, handling, velocity }] }` | Private |
+| `POST` | `/api/warehouse/transfer` | Move inventory units from a source slot to a destination slot. | `{ warehouseId, sourceSlotId, targetSlotId, sku, quantity }` | Private |
+| `POST` | `/api/warehouse/remove` | Outbound stock removal; picks items from slot and updates capacity. | `{ warehouseId, slotId, sku, quantity }` | Private |
+| `POST` | `/api/warehouse/rename` | Update the display name of a warehouse. | `{ warehouseId, name }` | Private |
+| `POST` | `/api/warehouse/reset` | Clear all inventory units and reset warehouse slots to vacant. | `{ warehouseId }` | Private |
+| `POST` | `/api/warehouse/sync` | Persist live floor layout, rack structures, and slots from client to MongoDB Atlas. | `{ warehouseId, companyName, racks }` | Private |
+| `GET` | `/api/warehouse/company/:companyName` | Fetch all warehouses belonging to a specific company. | Path `:companyName` | Private |
+| `GET` | `/api/warehouse/slots/:warehouseId` | Retrieve live slot occupancy, volume, weight, and status for a warehouse. | Path `:warehouseId` | Private |
+| `GET` | `/api/warehouse/allocations/:warehouseId` | Query historical batch allocation audit records and placement logs. | Path `:warehouseId` | Private |
+| `GET` | `/api/warehouse/:warehouseId` | Fetch complete warehouse model including rack layout directly from MongoDB Atlas. | Path `:warehouseId` | Private |
+
+```bash
+# Allocate Stock Example
+POST /api/warehouse/allocate
+Content-Type: application/json
+
+{
+  "warehouseId": "WH-01",
+  "items": [
+    {
+      "sku": "SKU-ELEC-01",
+      "name": "Industrial Sensor",
+      "width": 20,
+      "height": 15,
+      "length": 30,
+      "weight": 5,
+      "quantity": 10,
+      "handling": "fragile",
+      "velocity": "fast"
+    }
+  ]
+}
+```
+
+---
+
+## 6. Architecture
 
 ```text
                          USER
@@ -131,7 +262,7 @@ Each destination page reads from the same shared warehouse data defined in `js/f
 
 ---
 
-## 6. Authentication Flow
+## 7. Authentication Flow
 
 ```text
 User selects role
@@ -153,24 +284,24 @@ Validate form
     Invalid            Valid
        |                |
        v                v
- Show error       Verify credentials
+ Show error       POST /api/auth/login
                         |
                  +------+------+
                  |             |
                Invalid        Valid
                  |             |
                  v             v
-            Show error    Start session
+            Show error    Save JWT & Session
                                |
                                v
                        Redirect by role
 ```
 
-The selected role can be obtained from the URL query string or from LocalStorage, with `company-admin` used as the fallback role.
+The selected role can be obtained from the URL query string or from browser storage, with `company-admin` used as the fallback role.
 
 ---
 
-## 7. Role-Based Access
+## 8. Role-Based Access
 
 | Role | Entry point | Destination | Purpose |
 |---|---|---|---|
@@ -182,55 +313,34 @@ The role is also displayed on the Sign In card so the user can see which access 
 
 ---
 
-## 8. LocalStorage Architecture
+## 9. Storage & Session Architecture
 
-The frontend demo stores client-side state in LocalStorage. The separate backend API can read and update persistent warehouse and company records through the endpoints documented in Section 31.
+OptiVault implements a hybrid architecture: MongoDB Atlas is the persistent cloud system of record, while client storage (`localStorage` & `sessionStorage`) maintains the authenticated session and powers zero-latency cross-tab live synchronization.
 
 | Key | Purpose |
 |---|---|
-| `optivault-companies` | Registered company accounts |
-| `optivault-role` | Role selected on the landing page / Sign In |
-| `optivault-session` | Currently authenticated user |
-| `optivault-warehouse-<ID>` | Slot map for one specific warehouse |
+| `optivault-jwt` | Bearer JSON Web Token for authenticated REST API requests |
+| `optivault-session` | Currently authenticated user profile (`role`, `email`, `company`) |
+| `optivault-role` | Role selected on the landing page / Sign In pills |
+| `optivault-warehouse-<ID>` | Client-side cached slot map for a specific warehouse |
 | `optivault-active-warehouse` | Which warehouse a supervisor currently has open |
-| `optivault-unlocked` | Passcode-gate flag for the current warehouse |
+| `optivault-unlocked` | Passcode-gate unlock state for the active warehouse |
 | `optivault-warehouse-requests` | Queue of open/delete warehouse requests |
 | `optivault-approved-warehouses` | Warehouses created via an approved request |
 | `optivault-removed-warehouses` | Warehouses removed via an approved deletion |
 
-### `optivault-companies`
-```js
-{
-    name: "Company Name",
-    contact: "Contact Person",
-    email: "company@example.com",
-    password: "password",
-    requestedWarehouses: 3,
-    status: "pending",
-    warehouses: []
-}
-```
-
-### `optivault-role`
-```text
-company-admin
-```
-
-### `optivault-session`
-```js
-{
-    role: "company-admin",
-    email: "company@example.com",
-    company: "Company Name"
-}
-```
-
 ---
 
-## 9. Demo Data
+## 10. Default Accounts & Credentials
 
-Seeded automatically on first load if no company data already exists:
+### Platform Admin
+```text
+Email:    admin@optivault.internal
+Password: optivault2026
+Role:     platform-admin
+```
 
+### Sample Seeded Company
 ```text
 Company:  Harbor & Bell Logistics
 Email:    ops@harborbell.com
@@ -238,59 +348,43 @@ Password: warehouse123
 Status:   approved
 ```
 
-Three warehouses ship pre-built with real rack plans:
+Pre-configured demo warehouses:
 
-| ID | City | Passcode |
-|---|---|---|
-| `WH-MOH` | Mohali — Phase 8 Yard | `4021` |
-| `WH-CHD` | Chandigarh — Industrial Area | `5530` |
-| `WH-PAT` | Patiala — Rajpura Road | `6174` |
-
-Platform admin login is a single fixed credential:
-```js
-const PLATFORM_ADMIN = {
-    email: 'admin@optivault.internal',
-    password: 'optivault2026'
-};
-```
+| ID | City | Passcode | Slots |
+|---|---|---|---|
+| `WH-01` | Manesar Hub | `1101` | 32 (Expandable) |
+| `WH-02` | Neemrana Facility | `1102` | 32 (Expandable) |
+| `WH-04` | Bhiwadi Depot | `1104` | 32 (Expandable) |
 
 ---
 
-## 10. Credential Verification
+## 11. Credential Verification & Security
 
-`checkCredentials()` runs the actual check:
-
-### Platform Admin
-Compared directly against the fixed `PLATFORM_ADMIN` constant defined in the JavaScript file.
-
-### Company Accounts
-1. Retrieves companies from LocalStorage.
-2. Searches for the entered email.
-3. Checks the password.
-4. Checks the company's `status`.
-5. Creates a session if everything is valid.
-
-If the company isn't found, an "email not registered" error shows. If the password doesn't match, a password-specific error shows. If the company is still `pending`, sign-in is blocked with an approval-pending message.
+Authentication is secured on the backend via Express and MongoDB:
+1. **Password Hashing**: Passwords are encrypted before storage using `bcryptjs` with salt rounds.
+2. **Account Status Verification**: Accounts with status `pending` or `rejected` are prevented from signing in.
+3. **JWT Generation**: Authenticated users receive a signed JWT token containing user identity and company affiliation.
+4. **Google OAuth 2.0**: Supports seamless Single Sign-On using Google Identity Services.
 
 ---
 
-## 11. Sign In Validation
+## 12. Sign In & Client Validation
 
-The Sign In form validates organization email and password. On submit, JavaScript prevents the default browser submission and checks both fields.
+The Sign In form validates organization email and password. On submit, JavaScript prevents the default browser submission, checks both fields, and sends authentication requests to `/api/auth/login`.
 
 If validation fails: the invalid field gets an error style, the first invalid field receives focus, and the form does not submit.
 
-If validation succeeds: the button switches to a "verifying" state while credentials are checked against LocalStorage.
+If validation succeeds: the button switches to a "verifying" state while credentials are authenticated against MongoDB Atlas.
 
 ---
 
-## 12. Company Registration Flow
+## 13. Company Registration Flow
 
 ```text
 Register Company → Enter Details → Validate Fields → Validate Email
     → Check Password Length → Confirm Password Match
     → Check Duplicate Email → Create Company (status: "pending")
-    → Save to LocalStorage → Success Screen
+    → Save to MongoDB Atlas → Success Screen
 ```
 
 | Check | Result |
@@ -304,17 +398,17 @@ Register Company → Enter Details → Validate Fields → Validate Email
 
 ---
 
-## 13. Company Approval Workflow
+## 14. Company Approval Workflow
 
 ```text
 Company Registration → Pending → Platform Admin Review → Approved → Company Can Sign In
 ```
 
-A `pending` company cannot sign in until a platform admin approves it from the Platform Console (Section 17).
+A `pending` company cannot sign in until a platform admin approves it from the Platform Console.
 
 ---
 
-## 14. Registration Success Screen
+## 15. Registration Success Screen
 
 After a successful registration:
 - Displays the registered company name
@@ -324,9 +418,9 @@ After a successful registration:
 
 ---
 
-## 15. Warehouse Floor & Slot Allocation Engine
+## 16. Warehouse Floor & Slot Allocation Engine
 
-This is the core of the project, implemented in `js/floor.js` and used by every page that touches warehouse data.
+This is the core of the project, implemented in `js/floor.js` and supported by `/api/warehouse/allocate` in `warehouseController.js`.
 
 ### How a unit gets placed
 1. Incoming stock (dimensions, weight, quantity, pick velocity, fragile flag) is expanded into individual units.
@@ -353,7 +447,7 @@ Zone-level utilization (racks grouped and ordered by distance from the dock) plu
 
 ---
 
-## 16. Company Ledger
+## 17. Company Ledger
 
 `company-dashboard.html` / `js/admin.js` give a company admin a **read-only** view across every warehouse their company runs.
 
@@ -363,17 +457,18 @@ Zone-level utilization (racks grouped and ordered by distance from the dock) plu
 
 ---
 
-## 17. Platform Console
+## 18. Platform Console
 
-`platform-admin.html` / `js/platform.js` is the internal tool for the OptiVault team.
+`platform-admin.html` / `js/platform.js` is the internal governance tool for the OptiVault team:
 
-- **Company queue** — approve or decline new sign-ups. A declined or still-pending company cannot sign in.
+- **Company queue** — approve, decline, or delete new registrations. A declined or still-pending company cannot sign in.
 - **Warehouse request queue** — approving an *addition* request actually builds a new rack plan, generates a passcode, and adds the site to `WAREHOUSE_DIRECTORY`, so it immediately appears in the company's ledger and the supervisor's warehouse picker. Approving a *removal* request takes the site out of the directory.
+- **Request & Account Deletion** — interactive **Delete** button allowing platform admins to permanently delete pending or declined company accounts and warehouse requests.
 - **All Sites table** — a read-only list of every warehouse running on the platform, across every client company.
 
 ---
 
-## 18. Warehouse Utilization Animation
+## 19. Warehouse Utilization Animation
 
 Slot cards on the auth pages carry a target percentage:
 ```html
@@ -383,7 +478,7 @@ JavaScript reads it via `card.dataset.target` and animates the percentage and ba
 
 ---
 
-## 19. UI Design
+## 20. UI Design
 
 Each role has a distinct visual language, all sharing the same underlying conventions:
 
@@ -396,7 +491,7 @@ Shared conventions across all of them: rounded/square cards depending on role, t
 
 ---
 
-## 20. Responsive Design
+## 21. Responsive Design
 
 ### Desktop
 ```text
@@ -414,7 +509,7 @@ All multi-column layouts collapse to single-column below ~900px (auth pages brea
 
 ---
 
-## 21. Accessibility & UX
+## 22. Accessibility & UX
 
 - Semantic form labels and correct HTML input types
 - `autocomplete` attributes set deliberately per field (including disabling it where autofill would cause UI conflicts, e.g. the numeric warehouse passcode field)
@@ -426,36 +521,65 @@ All multi-column layouts collapse to single-column below ~900px (auth pages brea
 
 ---
 
-## 22. Folder Structure
+## 23. Folder Structure
 
-The repository is a **flat structure**: every HTML page sits at the repository root, alongside two shared asset folders — `css/` and `js/`. There is no separate `html/` folder, and every page uses root-relative paths (no `../`).
+OptiVault follows a clean, modular full-stack architecture. The backend adopts an MVC service pattern with Express and Mongoose, while the frontend sits cleanly at the root level:
 
 ```text
 OptiVault/
 │
-├── css/
+├── config/                    ← Database and external service initializers
+│   ├── db.js                  ← MongoDB Atlas connection via Mongoose
+│   └── nodemailer.js          ← SMTP email transporter configuration
+│
+├── controllers/               ← Core business logic and algorithm execution
+│   ├── adminController.js     ← Platform admin approvals, stats & company deletions
+│   ├── authController.js      ← Authentication, password comparison & JWT signing
+│   └── warehouseController.js ← Slot packing algorithm, stock transfers & removals
+│
+├── models/                    ← Mongoose schemas and data models
+│   ├── Company.js             ← Client company accounts & warehouse records
+│   ├── Slot.js                ← Warehouse physical slots, coordinates & capacities
+│   ├── Item.js                ← Cargo items stored inside slots
+│   └── Allocation.js          ← Historical placement logs & audit trail
+│
+├── routes/                    ← Express REST API endpoints
+│   ├── adminRoutes.js         ← /api/admin platform administration endpoints
+│   ├── authRoutes.js          ← /api/auth registration, login & JWT validation
+│   └── warehouseRoutes.js     ← /api/warehouse allocation, slots & state sync
+│
+├── utils/                     ← Shared utility services
+│   └── emailService.js        ← HTML email templates & SMTP mail sender
+│
+├── scripts/                   ← Standalone CLI utilities and test suites
+│   ├── test-workflow.js       ← End-to-end governance lifecycle test (npm test)
+│   └── seed-warehouse.js      ← Initial database seed script (npm run db:seed)
+│
+├── css/                       ← Modular UI styling
 │   ├── styles.css             ← Landing page
 │   ├── sigin.css              ← Sign In / Sign Up
-│   ├── floor.css              ← Warehouse floor / picker
+│   ├── floor.css              ← Warehouse floor & 3D view
 │   ├── admin.css              ← Company ledger
 │   └── platform.css           ← Platform console
 │
-├── js/
-│   ├── script.js               ← Landing page logic
-│   ├── sigin.js                 ← Auth & registration
-│   ├── floor.js                 ← Core allocation engine, shared by every other page
-│   ├── select.js                ← Warehouse picker (supervisor)
-│   ├── admin.js                 ← Company ledger
-│   └── platform.js              ← Platform console
+├── js/                        ← Frontend client scripts
+│   ├── api-config.js          ← Dynamic backend API base URL resolver
+│   ├── script.js              ← Landing page interactions
+│   ├── sigin.js               ← MongoDB auth integration & session setup
+│   ├── floor.js               ← Slot allocation engine & live sync
+│   ├── select.js              ← Warehouse picker (supervisor)
+│   ├── admin.js               ← Company ledger dashboard
+│   └── platform.js            ← Platform admin console & deletion controls
 │
-├── index.html
-├── signin.html
-├── signup.html
-├── warehouse-select.html
-├── warehouse-floor.html
-├── company-dashboard.html
-├── platform-admin.html
-│
+├── index.html                 ← Landing page
+├── signin.html                ← Role-based sign-in
+├── signup.html                ← Company registration
+├── warehouse-select.html      ← Facility picker for supervisors
+├── warehouse-floor.html       ← Live physical slot map & inventory controls
+├── warehouse-3d.html          ← 3D isometric warehouse visualization
+├── company-dashboard.html     ← Company admin governance ledger
+├── platform-admin.html        ← Platform admin internal console
+├── server.js                  ← Express server entry point
 └── README.md
 ```
 
@@ -467,54 +591,74 @@ OptiVault/
 
 ---
 
-## 23. Cross-Tab Live Sync
+## 24. Cross-Tab Live Sync
 
-The company ledger and platform console listen for the browser's native `storage` event, which fires in *other* tabs whenever LocalStorage changes in *one* tab (it does not fire in the same tab that made the change). This is how a supervisor placing stock on the floor page instantly updates the company admin's utilization numbers in a different tab, without any backend or polling involved.
-
----
-
-## 24. Security Disclaimer
-
-The frontend includes educational demo behavior where credentials, sessions, and some company data may be stored in LocalStorage in plain text. The backend API is separate; verify its deployed authentication and authorization behavior before treating it as production-safe. The API reference notes that platform-admin routes may not have platform-admin authentication.
-
-A real deployment would require:
-- Backend authentication
-- Password hashing (bcrypt/Argon2)
-- A real database (MongoDB / PostgreSQL)
-- Server-side authorization and RBAC
-- Secure session/token management (JWT or server sessions)
-- HTTPS
-- Email verification and password reset flows
+The company ledger and platform console listen for the browser's native `storage` event, which fires in *other* tabs whenever LocalStorage changes in *one* tab. This is how a supervisor placing stock on the floor page instantly updates the company admin's utilization numbers in a different tab without polling.
 
 ---
 
-## 25. Future Scope
+## 25. Security & Authentication Architecture
 
-| Feature | Future Implementation |
-|---|---|
-| Secure authentication | Backend authentication API |
-| Password security | Hashing using bcrypt/Argon2 |
-| Database | MongoDB / PostgreSQL |
-| Session security | JWT or secure server sessions |
-| Email verification | SMTP / transactional email |
-| Forgot password | OTP / reset-link workflow |
-| 3D warehouse view | Currently a disabled placeholder |
-| Role management | Server-side RBAC |
-| Warehouse access | Database-backed permissions |
+OptiVault implements industry-standard security safeguards:
+- **Password Encryption**: All passwords hashed using `bcryptjs` before persisting to MongoDB Atlas.
+- **Stateless Authorization**: JSON Web Tokens (JWT) signed with secret keys, verified on protected endpoints.
+- **Role-Based Access Control (RBAC)**: Enforces boundaries between `platform-admin`, `company-admin`, and `supervisor`.
+- **Sanitized Deletions**: Platform Admin can only delete pending or declined companies; companies with live warehouses are protected against accidental deletion.
+- **CORS Protection**: Whitelisted origin handling in Express for local and production Vercel/Render deployments.
 
 ---
 
 ## 26. How to Run
 
-### Live Demo
-**[https://optivault-production.up.railway.app](https://optivault-production.up.railway.app)**
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18.0.0 or higher)
+- [MongoDB Atlas](https://www.mongodb.com/atlas) connection URI (or local MongoDB)
 
-### Locally
-```bash
-git clone https://github.com/Sakshamv511/OptiVault.git
-cd OptiVault
-```
-Open any `.html` file directly in a browser. No build step, server, or `npm install` needed.
+### Installation & Local Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Sakshamv511/OptiVault.git
+   cd OptiVault
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**:
+   Create a `.env` file in the root directory:
+   ```env
+   PORT=5001
+   MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/optivault?retryWrites=true&w=majority
+   JWT_SECRET=your_jwt_secret_key_here
+   PLATFORM_ADMIN_EMAIL=admin@optivault.internal
+   PLATFORM_ADMIN_PASSWORD=optivault2026
+   FRONTEND_URL=http://localhost:5001
+   SMTP_HOST=smtp.ethereal.email
+   SMTP_PORT=587
+   SMTP_USER=your_user
+   SMTP_PASS=your_pass
+   ```
+
+4. **Seed Initial Database (Optional)**:
+   ```bash
+   npm run db:seed
+   ```
+
+5. **Run the Development Server**:
+   ```bash
+   npm run dev
+   # or
+   npm start
+   ```
+   Open `http://localhost:5001` in your browser.
+
+6. **Run Automated End-to-End Tests**:
+   ```bash
+   npm test
+   ```
 
 ---
 
@@ -543,11 +687,11 @@ Company Ledger   Warehouse Picker  Platform Console
 
 ---
 
-## 27. Application Flow Screenshots
+## 28. Application Flow Screenshots
 
 The screenshots below follow the main user journey through OptiVault, from the landing page and authentication to warehouse operations, company oversight, and platform administration.
 
-### 27.1 Landing & Authentication
+### 28.1 Landing & Authentication
 
 | Step | Screen |
 |---|---|
@@ -556,8 +700,7 @@ The screenshots below follow the main user journey through OptiVault, from the l
 | 3 | **How It Works** |
 | 4 | **Role Selection** |
 | 5 | **Company Registration** |
-| 6 | **Company Admin Sign In** |
-| 7 | **Supervisor Sign In** |
+| 6 | **Unified Role-Based Sign In & Google SSO** |
 
 ![Landing page — light theme](screenshots/01-landing-light.png)
 
@@ -569,33 +712,29 @@ The screenshots below follow the main user journey through OptiVault, from the l
 
 ![Company registration](screenshots/05-company-registration.png)
 
-![Company Admin sign-in](screenshots/06-company-admin-signin.png)
+![Unified Role-Based Sign In & Google SSO](screenshots/24-unified-signin-google.png)
 
-![Supervisor sign-in](screenshots/07-supervisor-signin.png)
+### 28.2 Supervisor / Warehouse Flow
 
-### 27.2 Supervisor / Warehouse Flow
-
-**Supervisor → Select Warehouse → Enter Passcode → Warehouse Floor → Stock In / Out**
-
-![Company Admin access screen](screenshots/08-company-admin-access.png)
+**Supervisor → Select Warehouse → Enter Passcode → Warehouse Floor (32 Slots) → Live Inventory**
 
 ![Warehouse selection](screenshots/09-warehouse-selection.png)
 
 ![Warehouse passcode](screenshots/10-warehouse-passcode.png)
 
-![Warehouse floor](screenshots/11-warehouse-floor.png)
+![Warehouse Floor — Live Supervisor Console](screenshots/20-warehouse-floor-supervisor.png)
 
-![Stock In / Out](screenshots/12-stock-in-out.png)
+![Warehouse Floor — Company Admin Read-Only View](screenshots/18-warehouse-floor-admin.png)
 
-### 27.3 Company Admin Flow
+### 28.3 Company Admin Flow
 
-**Company Admin → Warehouse Ledger → Submit Addition / Removal Requests**
+**Company Admin → Multi-Facility Ledger → Provisioning Queue**
 
-![Company Ledger overview](screenshots/13-company-ledger-overview.png)
+![Multi-Facility Warehouse Oversight Ledger](screenshots/23-company-ledger-oversight.png)
 
-![Company Ledger requests](screenshots/14-company-ledger-requests.png)
+![Capacity Requisitions Provisioning Queue](screenshots/21-company-ledger-provisioning.png)
 
-### 27.4 Platform Admin Flow
+### 28.4 Platform Admin Flow
 
 **Platform Admin → Warehouse Requests / Companies / All Sites**
 
@@ -605,9 +744,17 @@ The screenshots below follow the main user journey through OptiVault, from the l
 
 ![Platform all sites](screenshots/17-platform-all-sites.png)
 
+### 28.5 3D Spatial Visualization
+
+**Interactive 360° Isometric Physical Rack Geometry & Real-time Slot Occupancy**
+
+![Embedded 3D Spatial View Tab](screenshots/19-3d-spatial-view-tab.png)
+
+![Full Window 3D Warehouse Visualization](screenshots/22-warehouse-3d-fullscreen.png)
+
 ---
 
-## 28. Git Workflow
+## 29. Git Workflow
 
 ```bash
 git pull origin main
@@ -627,22 +774,17 @@ git push origin main
 
 ---
 
-## 29. Key JavaScript Concepts Demonstrated
+## 30. Key Concepts Demonstrated
 
 ```text
-Variables & Constants → Objects & Arrays → Functions → DOM Selection
-→ Event Listeners → Form Validation → Conditional Statements
-→ Array Methods (map / filter / reduce / forEach / find)
-→ LocalStorage → JSON.parse / JSON.stringify → URLSearchParams
-→ Timers (setTimeout) → requestAnimationFrame → performance.now()
-→ storage event (cross-tab sync) → DOM Manipulation
-→ Session Management → Role-Based Navigation
-→ First-fit-decreasing allocation algorithm
+Node.js & Express 5 → MongoDB Atlas & Mongoose Models → JWT Authentication & Bcrypt Hashing
+→ SMTP Transactional Mailer → Dynamic API Base URL Resolution → First-Fit Packing Algorithm
+→ 3D Isometric View → Cross-Tab Live Sync → Role-Based Access Control
 ```
 
 ---
 
-## 30. Project Scope
+## 31. Project Scope
 
 ```text
 USER ONBOARDING + AUTHENTICATION + ROLE IDENTIFICATION + SESSION CREATION
