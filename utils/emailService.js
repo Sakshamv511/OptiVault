@@ -1,21 +1,20 @@
 const { sendEmail: sendViaNodemailer } = require('../config/nodemailer');
 
 /**
- * Sends email using Resend, Brevo, or falls back to Nodemailer (SMTP / Ethereal).
+ * Sends transactional email using Resend's HTTPS API,
+ * with fallback to Nodemailer (SMTP / Ethereal) for local testing.
  */
 const sendMail = async ({ to, subject, html }) => {
   const resendApiKey = process.env.RESEND_API_KEY;
-  const brevoApiKey = process.env.BREVO_API_KEY;
-  const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL;
-  const senderName = process.env.EMAIL_SENDER_NAME || process.env.BREVO_SENDER_NAME || 'OptiVault Platform';
+  const senderName = process.env.EMAIL_SENDER_NAME || 'OptiVault Platform';
+  const recipients = Array.isArray(to) ? to : [String(to).trim()];
 
-  // 1. Try Resend if configured (HTTPS - zero port issues on Render, instant activation)
+  // 1. Send via Resend HTTPS API (ideal for Render and cloud production)
   if (resendApiKey) {
     try {
       const fromAddress = process.env.RESEND_FROM || `${senderName} <onboarding@resend.dev>`;
-      const recipients = Array.isArray(to) ? to : [String(to).trim()];
 
-      const res = await fetch('https://api.resend.com/emails', {
+      const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${resendApiKey}`,
@@ -29,81 +28,25 @@ const sendMail = async ({ to, subject, html }) => {
         })
       });
 
-      const resData = await res.json();
-      if (res.ok && resData.id) {
-        console.log(`[Email Accepted] Resend sent email to ${recipients.join(', ')} | ID: ${resData.id}`);
-        return { success: true, messageId: resData.id };
+      const data = await response.json();
+
+      if (response.ok && data.id) {
+        console.log(`[Email Delivered via Resend] To: ${recipients.join(', ')} | ID: ${data.id}`);
+        return {
+          success: true,
+          messageId: data.id
+        };
       } else {
-        console.warn(`[Resend Error] ${resData.message || 'Sending failed'}`);
+        console.warn(`[Resend Warning] ${data.message || 'Request failed'}. Attempting fallback...`);
       }
     } catch (resendErr) {
-      console.warn(`[Resend Error] ${resendErr.message}`);
-    }
-  }
-
-  // 2. Try Brevo HTTPS API if configured
-  if (brevoApiKey && brevoSenderEmail) {
-    try {
-      const recipients = Array.isArray(to)
-        ? to.map((email) => typeof email === 'string' ? { email } : email)
-        : [{ email: String(to).trim() }];
-
-      const response = await fetch(
-        'https://api.brevo.com/v3/smtp/email',
-        {
-          method: 'POST',
-          headers: {
-            accept: 'application/json',
-            'api-key': brevoApiKey,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: {
-              name: senderName,
-              email: brevoSenderEmail
-            },
-            to: recipients,
-            subject,
-            htmlContent: html
-          })
-        }
-      );
-
-      const responseText = await response.text();
-      let result = {};
-
-      try {
-        result = responseText ? JSON.parse(responseText) : {};
-      } catch {
-        result = { message: responseText };
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          `Brevo API error ${response.status}: ${
-            result.message || result.code || 'Request failed'
-          }`
-        );
-      }
-
-      console.log(
-        `[Email Accepted] Brevo accepted email to ${recipients
-          .map((recipient) => recipient.email)
-          .join(', ')} | MessageId: ${result.messageId || 'not returned'}`
-      );
-
-      return {
-        success: true,
-        messageId: result.messageId || null
-      };
-    } catch (error) {
-      console.error(`[Brevo Email Error] ${error.message}. Attempting Nodemailer fallback...`);
+      console.warn(`[Resend Error] ${resendErr.message}. Attempting fallback...`);
     }
   }
 
   // 2. Fallback to Nodemailer (Gmail SMTP or Ethereal test mailer)
   try {
-    const toAddress = Array.isArray(to) ? to.join(', ') : String(to).trim();
+    const toAddress = recipients.join(', ');
     const result = await sendViaNodemailer({
       to: toAddress,
       subject,
@@ -116,7 +59,7 @@ const sendMail = async ({ to, subject, html }) => {
       messageId: result.info && result.info.messageId ? result.info.messageId : null
     };
   } catch (nodemailerError) {
-    console.error(`[Email Error] Failed to send email to ${to}: ${nodemailerError.message}`);
+    console.error(`[Email Error] Failed to send email to ${recipients.join(', ')}: ${nodemailerError.message}`);
     return {
       success: false,
       error: nodemailerError.message

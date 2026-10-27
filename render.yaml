@@ -26,11 +26,7 @@ services:
         value: https://optivault-warehouse.vercel.app
       - key: PLATFORM_ADMIN_EMAIL
         value: admin@optivault.internal
-      - key: SMTP_SERVICE
-        value: gmail
-      - key: SMTP_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: EMAIL_FROM
-        value: '"OptiVault Platform" <optivault601@gmail.com>'
+      - key: EMAIL_SENDER_NAME
+        value: OptiVault Platform
