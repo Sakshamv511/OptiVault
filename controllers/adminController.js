@@ -209,8 +209,49 @@ const getPlatformStats = async (req, res, next) => {
   }
 };
 
+const deletePendingCompany = async (req, res, next) => {
+  try {
+    const identifier = String(req.params.identifier || '').trim();
+
+    const query = /^[0-9a-fA-F]{24}$/.test(identifier)
+      ? { _id: identifier }
+      : { email: identifier.toLowerCase() };
+
+    const company = await Company.findOne(query);
+
+    if (!['pending', 'rejected'].includes(company.status)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Only pending or rejected company registrations can be deleted.'
+      });
+    }
+    if (company.warehouses && company.warehouses.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Cannot delete a company that still has warehouse records.'
+      });
+    }
+
+    await Company.deleteOne({ _id: company._id });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Pending company registration deleted successfully.',
+      deletedCompany: {
+        id: company._id,
+        name: company.name,
+        email: company.email
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllCompanies,
   decideCompany,
-  getPlatformStats
+  getPlatformStats,
+  deletePendingCompany
+
 };
