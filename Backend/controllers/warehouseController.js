@@ -1,4 +1,4 @@
-const { Slot, Item, Allocation, Company } = require('../models');
+const { Slot, Item, Allocation, Company } = require('../../models');
 
 // Helper to calculate volume in litres: (L * W * H in cm) / 1000
 function volumeOf(l, w, h) {
