@@ -167,6 +167,8 @@ h1{ font-size:22px; font-weight:600; }
 .btn.go:hover{ background:#000; }
 .btn.no{ color:var(--red); border-color:#e8cdc9; }
 .btn.no:hover{ background:#fbf1ef; }
+.btn.danger{ color:var(--red); border-color:#e8cdc9; }
+.btn.danger:hover{ background:#b3372a; color:#fff; border-color:#b3372a; }
 
 .outcome{
   margin-top:13px; padding:11px 13px;

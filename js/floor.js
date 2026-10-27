@@ -1104,6 +1104,24 @@ function rejectDeleteRequest(ref){
   return decideRequest(ref, 'rejected');
 }
 
+function deleteWarehouseRequest(ref){
+  try{
+    const raw = localStorage.getItem(FLOOR_KEYS.requests);
+    let fullList = raw ? JSON.parse(raw) : [];
+    if(!Array.isArray(fullList)) fullList = [];
+    const prevLen = fullList.length;
+    const next = fullList.filter(entry => entry.ref !== ref);
+    if(next.length !== prevLen){
+      saveRequests(next);
+      return true;
+    }
+    return false;
+  }catch(err){
+    console.warn('Could not delete warehouse request:', err);
+    return false;
+  }
+}
+
 /* ---------------------------------------------------------------
    COMPANY ACCOUNTS
    Sign-up writes companies here as pending. The platform admin is
@@ -1130,6 +1148,19 @@ function decideCompany(email, decision){
   found.status = decision;
   found.decidedAt = Date.now();
   return found;
+}
+
+function deleteCompanyAccount(identifier){
+  const idStr = String(identifier || '').toLowerCase();
+  const list = loadCompanyAccounts();
+  const index = list.findIndex(entry =>
+    (entry.id && String(entry.id).toLowerCase() === idStr) ||
+    (entry.email && entry.email.toLowerCase() === idStr)
+  );
+  if(index === -1) return null;
+  const removed = list.splice(index, 1)[0];
+  saveCompanyAccounts(list);
+  return removed;
 }
 
 /* =====================================================================

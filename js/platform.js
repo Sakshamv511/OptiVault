@@ -186,6 +186,7 @@ function renderRequestQueue(){
         <div class="actions">
           <button class="btn go" data-approve-request="${entry.ref}" type="button">${entry.type === 'delete' ? 'Approve and remove site' : 'Approve and open site'}</button>
           <button class="btn no" data-reject-request="${entry.ref}" type="button">Decline</button>
+          <button class="btn danger" data-delete-request="${entry.ref}" type="button">Delete</button>
         </div>` : ''}
 
       ${entry.status === 'approved' ? `
@@ -200,6 +201,9 @@ function renderRequestQueue(){
       ${entry.status === 'rejected' ? `
         <div class="outcome bad">
           Declined ${timeAgo(entry.decidedAt)}. ${entry.type === 'delete' ? 'The warehouse was not removed.' : 'No warehouse was created.'}
+        </div>
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn danger" data-delete-request="${entry.ref}" type="button">Delete request</button>
         </div>` : ''}
 
     </div>`).join('');
@@ -220,6 +224,24 @@ function renderRequestQueue(){
       const req = loadRequests().find(entry => entry.ref === ref);
       if(req && req.type === 'delete') rejectDeleteRequest(ref);
       else rejectWarehouseRequest(ref);
+      renderConsole();
+    });
+  });
+
+  host.querySelectorAll('[data-delete-request]').forEach(button => {
+    button.addEventListener('click', function(){
+      const ref = button.dataset.deleteRequest;
+      const req = loadRequests().find(entry => entry.ref === ref);
+      const title = req ? (req.city || req.ref) : ref;
+      if(!confirm(`Are you sure you want to delete warehouse request "${title}" (${ref})? This cannot be undone.`)){
+        return;
+      }
+      if(typeof deleteWarehouseRequest === 'function'){
+        deleteWarehouseRequest(ref);
+      } else {
+        const remaining = loadRequests().filter(entry => entry.ref !== ref);
+        saveRequests(remaining);
+      }
       renderConsole();
     });
   });
@@ -276,6 +298,7 @@ function renderCompanyQueue(){
         <div class="actions">
           <button class="btn go" data-approve-company="${entry.email}" type="button">Approve account</button>
           <button class="btn no" data-reject-company="${entry.email}" type="button">Decline</button>
+          <button class="btn danger" data-delete-company="${entry.id || entry.email}" data-company-name="${entry.name}" data-company-email="${entry.email}" type="button">Delete</button>
         </div>` : ''}
 
       ${entry.status === 'approved' ? `
@@ -286,6 +309,9 @@ function renderCompanyQueue(){
       ${entry.status === 'rejected' ? `
         <div class="outcome bad">
           Declined. Sign-in stays blocked for this account.
+        </div>
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn danger" data-delete-company="${entry.id || entry.email}" data-company-name="${entry.name}" data-company-email="${entry.email}" type="button">Delete company</button>
         </div>` : ''}
 
     </div>`).join('');
@@ -346,6 +372,63 @@ function renderCompanyQueue(){
         alert('Network error connecting to backend: ' + err.message);
         button.disabled = false;
         button.textContent = 'Decline';
+      }
+    });
+  });
+
+  host.querySelectorAll('[data-delete-company]').forEach(button => {
+    button.addEventListener('click', async function(){
+      const idOrEmail = button.dataset.deleteCompany;
+      const compName = button.dataset.companyName || 'this company';
+      const compEmail = button.dataset.companyEmail || idOrEmail;
+
+      if(!confirm(`Are you sure you want to delete the registration for "${compName}" (${compEmail})? This cannot be undone.`)){
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Deleting…';
+
+      try {
+        const deleteUrl = typeof getApiUrl === 'function'
+          ? getApiUrl('/api/admin/companies/' + encodeURIComponent(idOrEmail))
+          : '/api/admin/companies/' + encodeURIComponent(idOrEmail);
+
+        const res = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data.success) {
+          if(typeof deleteCompanyAccount === 'function'){
+            deleteCompanyAccount(idOrEmail);
+            deleteCompanyAccount(compEmail);
+          }
+          await syncCompaniesFromBackend();
+          renderConsole();
+        } else {
+          if (res.status === 404 || !res.ok) {
+            console.warn('Backend deletion notice:', data.message);
+            if(typeof deleteCompanyAccount === 'function'){
+              deleteCompanyAccount(idOrEmail);
+              deleteCompanyAccount(compEmail);
+            }
+            renderConsole();
+            return;
+          }
+          alert('Delete error: ' + (data.message || 'Server error occurred.'));
+          button.disabled = false;
+          button.textContent = 'Delete';
+        }
+      } catch(err) {
+        console.warn('Network error deleting company, removing locally in demo mode:', err);
+        if(typeof deleteCompanyAccount === 'function'){
+          deleteCompanyAccount(idOrEmail);
+          deleteCompanyAccount(compEmail);
+        }
+        renderConsole();
       }
     });
   });

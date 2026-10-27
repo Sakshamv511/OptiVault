@@ -7,6 +7,7 @@ router.get('/companies', getAllCompanies);
 router.post('/companies/decide', decideCompany);
 router.put('/companies/:identifier/decide', decideCompany);
 router.delete('/companies/:identifier', deletePendingCompany);
+router.delete('/companies', deletePendingCompany);
 router.get('/stats', getPlatformStats);
 
 module.exports = router;

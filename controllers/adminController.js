@@ -211,13 +211,27 @@ const getPlatformStats = async (req, res, next) => {
 
 const deletePendingCompany = async (req, res, next) => {
   try {
-    const identifier = String(req.params.identifier || '').trim();
+    const identifier = String(req.params.identifier || req.body.identifier || req.body.id || req.body.email || req.query.identifier || '').trim();
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Company identifier (id or email) is required.'
+      });
+    }
 
     const query = /^[0-9a-fA-F]{24}$/.test(identifier)
       ? { _id: identifier }
       : { email: identifier.toLowerCase() };
 
     const company = await Company.findOne(query);
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: 'Company not found.'
+      });
+    }
 
     if (!['pending', 'rejected'].includes(company.status)) {
       return res.status(409).json({
@@ -236,7 +250,7 @@ const deletePendingCompany = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Pending company registration deleted successfully.',
+      message: 'Company registration deleted successfully.',
       deletedCompany: {
         id: company._id,
         name: company.name,
