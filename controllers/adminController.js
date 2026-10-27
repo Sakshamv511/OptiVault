@@ -176,7 +176,8 @@ const decideCompany = async (req, res, next) => {
         decidedAt: company.decidedAt,
         decisionNote: company.decisionNote
       },
-      emailSent: Boolean(emailResult),
+      emailSent: Boolean(emailResult && emailResult.success),
+      emailError: emailResult && !emailResult.success ? emailResult.error : null,
       previewUrl: emailResult && emailResult.previewUrl ? emailResult.previewUrl : null
     });
   } catch (error) {
