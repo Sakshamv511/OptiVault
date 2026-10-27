@@ -1,35 +1,17 @@
 /* ==========================================================
-   SLOTWISE — Sign In / Sign Up page interactions
-   ==========================================================
-
-   HOW ACCESS WORKS (all client-side, LocalStorage only)
-
-   1. On the landing page the user picks a role in the modal.
-      That choice is saved as        optivault-role
-   2. Platform admin  -> one fixed credential kept in this file
-   3. Company         -> email + password looked up in
-                         optivault-companies
-   4. The role decides where they land after sign-in:
-        company-admin  -> sees every warehouse, view only
-        supervisor     -> picks a warehouse, then a passcode
-        platform-admin -> sees every company
+   OPTIVAULT — Sign In / Sign Up page interactions
+   All user and company authentication is handled via MongoDB backend.
+   Browser storage retains only the active login session & JWT token.
    ========================================================== */
-
 
 /* ---------- storage keys, kept in one place ---------- */
 const STORAGE = {
-  companies: 'optivault-companies',
   role:      'optivault-role',
   session:   'optivault-session'
 };
 
-
-/* ---------- the one platform-admin login (that's us) ---------- */
-const PLATFORM_ADMIN = {
-  email:    'admin@optivault.internal',
-  password: 'optivault2026'
-};
-
+// Purge any legacy mock company database from browser storage
+try { localStorage.removeItem('optivault-companies'); } catch(e){}
 
 /* ---------- where each role goes after a good sign-in ---------- */
 const ROLE_DESTINATIONS = {
@@ -38,7 +20,6 @@ const ROLE_DESTINATIONS = {
   'platform-admin': 'platform-admin.html'
 };
 
-
 /* ---------- labels shown on the sign-in card ---------- */
 const ROLE_LABELS = {
   'company-admin':  'Company admin access',
@@ -46,59 +27,13 @@ const ROLE_LABELS = {
   'platform-admin': 'Platform admin access'
 };
 
-
 document.addEventListener('DOMContentLoaded', () => {
-  seedDemoData();
   animateSlotCards();
   initSignInForm();
   initSignUpForm();
   initPasswordToggles();
   initGoogleAuth();
 });
-
-
-/* ==========================================================
-   DEMO DATA
-   Creates one company the first time the site is opened,
-   so sign-in works straight away during a demo.
-   ========================================================== */
-function seedDemoData(){
-  if(localStorage.getItem(STORAGE.companies)) return;
-
-  const demo = [{
-    name: 'Harbor & Bell Logistics',
-    email: 'ops@harborbell.com',
-    password: 'warehouse123',
-    status: 'approved',
-    warehouses: [
-      { id:'WH-01', name:'Manesar',  passcode:'1101', slots:400 },
-      { id:'WH-02', name:'Neemrana', passcode:'1102', slots:400 },
-      { id:'WH-04', name:'Bhiwadi',  passcode:'1104', slots:400 }
-    ]
-  }];
-
-  saveCompanies(demo);
-}
-
-
-/* ---------- read / write the company list ---------- */
-function getCompanies(){
-  try{
-    return JSON.parse(localStorage.getItem(STORAGE.companies)) || [];
-  }catch(err){
-    console.warn('Could not read companies:', err);
-    return [];
-  }
-}
-
-function saveCompanies(list){
-  try{
-    localStorage.setItem(STORAGE.companies, JSON.stringify(list));
-  }catch(err){
-    console.warn('Could not save companies:', err);
-  }
-}
-
 
 /* ---------- which role did they pick in the modal? ---------- */
 function getSelectedRole(){
@@ -239,30 +174,6 @@ function initSignInForm(){
 
 /* ---------- the actual access check ---------- */
 async function checkCredentials(role, emailValue, passwordValue){
-
-  // Platform admin check (matches credentials regardless of pre-selected role)
-  if(emailValue === PLATFORM_ADMIN.email.toLowerCase()){
-    if(passwordValue === PLATFORM_ADMIN.password){
-      const session = { role: 'platform-admin', email: emailValue, company: 'OptiVault' };
-      startSession(session);
-      try {
-        const adminLoginUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/login') : '/api/auth/login';
-        fetch(adminLoginUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailValue, password: passwordValue, role: 'platform-admin' })
-        }).then(r => r.json()).then(d => {
-          if (d.token) {
-            try { localStorage.setItem('optivault-jwt', d.token); } catch(e){}
-          }
-        }).catch(()=>{});
-      } catch(e){}
-      return { ok: true, session };
-    }
-    return { ok: false, message: 'That is not a valid platform admin login.' };
-  }
-
-  // 1. Try backend API authentication
   try {
     const loginUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/auth/login') : '/api/auth/login';
     const res = await fetch(loginUrl, {
@@ -271,7 +182,7 @@ async function checkCredentials(role, emailValue, passwordValue){
       body: JSON.stringify({ email: emailValue, password: passwordValue, role })
     });
     const data = await res.json();
-    if(data.success && data.token){
+    if(res.ok && data.success && data.token){
       try { localStorage.setItem('optivault-jwt', data.token); } catch(err){}
       return {
         ok: true,
@@ -283,41 +194,12 @@ async function checkCredentials(role, emailValue, passwordValue){
       message: data.message || 'Authentication failed.'
     };
   } catch(netErr) {
-    console.warn('Backend not reached, checking local fallback:', netErr);
-  }
-
-  // 2. Local fallback if server is offline
-
-  // Everyone else signs in with their company account.
-  const company = getCompanies().find(
-    item => item.email.toLowerCase() === emailValue
-  );
-
-  if(!company){
+    console.warn('Backend not reached:', netErr);
     return {
       ok: false,
-      message: 'No company is registered with that email address.'
+      message: 'Could not connect to authentication server. Please ensure backend is running.'
     };
   }
-
-  if(company.password !== passwordValue){
-    return {
-      ok: false,
-      message: 'That password does not match this company account.'
-    };
-  }
-
-  if(company.status === 'pending'){
-    return {
-      ok: false,
-      message: 'This registration is still awaiting approval. We will be in touch soon.'
-    };
-  }
-
-  return {
-    ok: true,
-    session: { role, email: emailValue, company: company.name }
-  };
 }
 
 
