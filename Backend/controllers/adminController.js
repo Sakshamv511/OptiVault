@@ -1,6 +1,6 @@
 const Company = require('../models/Company');
 const Slot = require('../models/Slot');
-const { sendApprovalEmail, sendRejectionEmail } = require('../../utils/emailService');
+const { sendApprovalEmail, sendRejectionEmail } = require('../utils/emailService');
 
 /**
  * @route   GET /api/admin/companies
