@@ -1,0 +1,12 @@
+{
+  "name": "optivault",
+  "version": "1.0.0",
+  "description": "OptiVault — Warehouse Slot Allocation & Packing Optimizer",
+  "scripts": {
+    "start": "node Backend/server.js",
+    "dev": "nodemon Backend/server.js",
+    "test": "node Backend/scripts/test-workflow.js",
+    "db:view": "node Backend/scripts/view-db.js",
+    "db:seed": "node Backend/scripts/seed-warehouse.js"
+  }
+}

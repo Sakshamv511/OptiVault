@@ -38,6 +38,21 @@ document.addEventListener('DOMContentLoaded', async function(){
     await Promise.all(sites.map(s => syncFromCloud(s.id)));
     renderSites();
   }
+
+  // Live reload on cross-tab storage changes and tab focus
+  window.addEventListener('storage', function(e){
+    if(e.key === FLOOR_KEYS.extraSites || e.key === FLOOR_KEYS.requests || e.key === FLOOR_KEYS.removedSites){
+      if(typeof mergeApprovedSites === 'function') mergeApprovedSites();
+      if(typeof syncWarehousesForCompany === 'function') syncWarehousesForCompany(currentCompany);
+      renderSites();
+    }
+  });
+
+  window.addEventListener('focus', function(){
+    if(typeof mergeApprovedSites === 'function') mergeApprovedSites();
+    if(typeof syncWarehousesForCompany === 'function') syncWarehousesForCompany(currentCompany);
+    renderSites();
+  });
 });
 
 

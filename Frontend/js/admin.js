@@ -703,8 +703,11 @@ function initLiveRefresh(){
 
     const touchesWarehouse = event.key.indexOf(FLOOR_KEYS.warehousePrefix) === 0;
     const touchesRequests = event.key === FLOOR_KEYS.requests;
+    const touchesExtra = event.key === FLOOR_KEYS.extraSites;
+    const touchesRemoved = event.key === FLOOR_KEYS.removedSites;
 
-    if(touchesWarehouse || touchesRequests){
+    if(touchesWarehouse || touchesRequests || touchesExtra || touchesRemoved){
+      if(typeof mergeApprovedSites === 'function') mergeApprovedSites();
       renderEverything();
       syncAllCompanySitesFromCloud();
       flashLiveNote();
@@ -712,6 +715,7 @@ function initLiveRefresh(){
   });
 
   window.addEventListener('focus', function(){
+    if(typeof mergeApprovedSites === 'function') mergeApprovedSites();
     renderEverything();
     syncAllCompanySitesFromCloud();
   });

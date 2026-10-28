@@ -77,9 +77,16 @@ function warehouseInfo(id){
 
 function warehousesForCompany(companyName){
   if(!companyName || companyName === 'Demo company' || companyName === 'Harbor & Bell Logistics'){
-    return WAREHOUSE_DIRECTORY.filter(entry => !entry.company || entry.company === 'Harbor & Bell Logistics');
+    return WAREHOUSE_DIRECTORY.filter(entry => 
+      !entry.company || 
+      entry.company === 'Harbor & Bell Logistics' || 
+      entry.company === 'Demo company'
+    );
   }
-  return WAREHOUSE_DIRECTORY.filter(entry => entry.company === companyName);
+  const norm = companyName.trim().toLowerCase();
+  return WAREHOUSE_DIRECTORY.filter(entry => 
+    entry.company && entry.company.trim().toLowerCase() === norm
+  );
 }
 
 // Fetch all approved/generated warehouses for this company live from MongoDB Atlas
@@ -94,7 +101,9 @@ async function syncWarehousesForCompany(companyName){
       const data = await res.json();
       if(data && data.success && Array.isArray(data.warehouses)){
         const approved = typeof loadApprovedSites === 'function' ? loadApprovedSites() : [];
+        const removed = typeof loadRemovedSites === 'function' ? loadRemovedSites() : [];
         data.warehouses.forEach(w => {
+          if(removed.includes(w.id)) return;
           const existing = WAREHOUSE_DIRECTORY.find(entry => entry.id === w.id);
           if(existing){
             existing.name = w.name;
@@ -186,17 +195,19 @@ function saveApprovedSites(list){
 }
 
 function mergeApprovedSites(){
-  const companies = typeof loadCompanyAccounts === 'function' ? loadCompanyAccounts() : [];
-  const validCompanies = new Set(companies.map(c => c.name));
-  validCompanies.add('Harbor & Bell Logistics');
-  validCompanies.add('Demo company');
-
-  const approved = loadApprovedSites().filter(site => validCompanies.has(site.company));
-  saveApprovedSites(approved);
+  const removed = typeof loadRemovedSites === 'function' ? loadRemovedSites() : [];
+  const approved = loadApprovedSites().filter(site => site && site.id && !removed.includes(site.id));
 
   approved.forEach(site => {
-    const known = WAREHOUSE_DIRECTORY.some(entry => entry.id === site.id);
-    if(!known){
+    const existing = WAREHOUSE_DIRECTORY.find(entry => entry.id === site.id);
+    if(existing){
+      existing.name = site.name || existing.name;
+      existing.city = site.city || existing.city;
+      existing.address = site.address || existing.address;
+      existing.passcode = site.passcode || existing.passcode;
+      existing.note = site.note || existing.note;
+      existing.company = site.company || existing.company;
+    } else {
       WAREHOUSE_DIRECTORY.push({
         id: site.id,
         name: site.name,
@@ -422,7 +433,7 @@ function saveWarehouse(warehouse){
     const syncUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/warehouse/sync') : '/api/warehouse/sync';
     const session = (function(){ try { return JSON.parse(localStorage.getItem(FLOOR_KEYS.session)); } catch(e){ return null; } })();
     const whMeta = typeof warehouseInfo === 'function' ? warehouseInfo(warehouse.id) : null;
-    const currentCompany = (session && session.company) || (whMeta && whMeta.company) || '';
+    const currentCompany = (whMeta && whMeta.company) || (session && session.company) || '';
 
     fetch(syncUrl, {
       method: 'POST',
@@ -430,6 +441,9 @@ function saveWarehouse(warehouse){
       body: JSON.stringify({
         warehouseId: warehouse.id,
         companyName: currentCompany,
+        name: whMeta ? whMeta.name : undefined,
+        city: whMeta ? whMeta.city : undefined,
+        passcode: whMeta ? whMeta.passcode : undefined,
         racks: warehouse.racks
       })
     }).catch(err => console.warn('[MongoDB Sync Note]', err.message));
@@ -967,7 +981,9 @@ function submitWarehouseRequest(details){
 }
 
 function requestsForCompany(company){
-  return loadRequests().filter(entry => entry.company === company);
+  if(!company) return [];
+  const norm = company.trim().toLowerCase();
+  return loadRequests().filter(entry => entry.company && entry.company.trim().toLowerCase() === norm);
 }
 
 /* Used by the platform admin page. */
@@ -990,10 +1006,12 @@ function decideRequest(ref, decision){
    --------------------------------------------------------------- */
 
 function makeSiteId(city){
-  const base = 'WH-' + city.replace(/[^a-z]/gi,'').slice(0,3).toUpperCase();
+  const base = 'WH-' + (city || 'FAC').replace(/[^a-z]/gi,'').slice(0,3).toUpperCase();
   let candidate = base;
   let counter = 2;
-  while(WAREHOUSE_DIRECTORY.some(entry => entry.id === candidate)){
+  const approved = typeof loadApprovedSites === 'function' ? loadApprovedSites() : [];
+  const allIds = new Set([...WAREHOUSE_DIRECTORY.map(e => e.id), ...approved.map(e => e.id)]);
+  while(allIds.has(candidate)){
     candidate = base + counter;
     counter++;
   }

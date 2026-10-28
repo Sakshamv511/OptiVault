@@ -51,6 +51,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve frontend static files seamlessly if running monolithic or local
+app.use(express.static(path.join(__dirname, '../Frontend')));
 app.use(express.static(path.join(__dirname)));
 
 // API Root Status

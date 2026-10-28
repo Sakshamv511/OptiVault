@@ -740,32 +740,46 @@ exports.syncWarehouseState = async (req, res, next) => {
     const whId = warehouseId.toUpperCase();
     const isPrimary = ['WH-MOH', 'WH-CHD', 'WH-PAT'].includes(whId);
 
-    // If dynamic warehouse, verify its company exists before saving slots
-    if (!isPrimary && companyName) {
-      const company = await Company.findOne({ name: companyName.trim() });
-      if (!company) {
-        return res.status(200).json({ success: false, message: 'Skipped sync for removed company' });
-      }
-      if (!company.warehouses.some(w => w.id === whId)) {
+    // If dynamic or primary warehouse, sync to company record in MongoDB
+    if (companyName) {
+      const company = await Company.findOne({
+        name: { $regex: new RegExp('^' + companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }
+      });
+      if (company) {
         const totalSlots = racks.reduce((acc, r) => acc + (r.slots ? r.slots.length : 0), 0);
-        company.warehouses.push({
-          id: whId,
-          name: `${company.name} Yard (${whId})`,
-          passcode: '1101',
-          slots: totalSlots || 48
-        });
-        await company.save();
-      }
-    } else if (companyName && isPrimary) {
-      const company = await Company.findOne({ name: companyName.trim() });
-      if (company && !company.warehouses.some(w => w.id === whId)) {
-        company.warehouses.push({
-          id: whId,
-          name: `${company.name} (${whId})`,
-          passcode: '1101',
-          slots: racks.reduce((acc, r) => acc + (r.slots ? r.slots.length : 0), 0) || 48
-        });
-        await company.save();
+        const existingWh = company.warehouses.find(w => w.id === whId);
+        if (!existingWh) {
+          company.warehouses.push({
+            id: whId,
+            name: req.body.name || `${company.name} — ${req.body.city || 'Site'} (${whId})`,
+            city: req.body.city || 'Central Hub',
+            passcode: req.body.passcode || '1101',
+            slots: totalSlots || 32
+          });
+          await company.save();
+        } else {
+          let modified = false;
+          if (req.body.name && existingWh.name !== req.body.name) {
+            existingWh.name = req.body.name;
+            modified = true;
+          }
+          if (req.body.city && existingWh.city !== req.body.city) {
+            existingWh.city = req.body.city;
+            modified = true;
+          }
+          if (req.body.passcode && existingWh.passcode !== req.body.passcode) {
+            existingWh.passcode = req.body.passcode;
+            modified = true;
+          }
+          if (totalSlots && existingWh.slots !== totalSlots) {
+            existingWh.slots = totalSlots;
+            modified = true;
+          }
+          if (modified) {
+            company.markModified('warehouses');
+            await company.save();
+          }
+        }
       }
     }
 
