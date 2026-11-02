@@ -179,26 +179,8 @@ a{
 }
 
 .btn-account{
-  appearance:none;
-  -webkit-appearance:none;
-  background:transparent;
-  color:var(--ink);
-  font-family:inherit;
-  font-size:12px;
   border:1px solid var(--ink);
   padding:8px 16px;
-  margin-left:26px;
-  text-decoration:none;
-  cursor:pointer;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  transition:color .2s ease, border-color .2s ease;
-}
-
-.btn-account:hover{
-  color:var(--orange);
-  border-color:var(--orange);
 }
 
 
