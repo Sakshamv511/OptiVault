@@ -26,10 +26,11 @@ import {
   timeAgo,
   FLOOR_KEYS
 } from '../services/floorEngine';
-import '../css/floor.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 export default function WarehouseFloor() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/floor.css');
   const [searchParams] = useSearchParams();
   const session = getSession();
 

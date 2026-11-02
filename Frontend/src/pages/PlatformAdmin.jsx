@@ -15,10 +15,11 @@ import {
   WAREHOUSE_DIRECTORY
 } from '../services/floorEngine';
 import { getApiUrl } from '../services/apiConfig';
-import '../css/platform.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 export default function PlatformAdmin() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/platform.css');
   const session = getSession();
   const isPlatformAdmin = session?.role === 'platform-admin';
 

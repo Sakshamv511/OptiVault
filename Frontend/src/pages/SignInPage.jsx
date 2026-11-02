@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { loginUser, ROLE_DESTINATIONS } from '../services/authService';
-import '../css/sigin.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 const SAMPLE_SLOTS = [
   { id: 'A01', target: 92 },
@@ -47,6 +47,7 @@ const ROLE_INFO = {
 export default function SignInPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  usePageStylesheet('/css/sigin.css');
   const [role, setRole] = useState(() => {
     const fromUrl = searchParams.get('role');
     if (fromUrl && ROLE_INFO[fromUrl]) return fromUrl;

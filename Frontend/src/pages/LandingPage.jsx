@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import '../css/styles.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 const GRID_LAYOUT = [
   2, 1, 0, 2, 1, 0, 1, 0, 2, 1, 1, 0,
@@ -13,6 +13,8 @@ const SLOT_CLASSES = ['', 'g', 'o'];
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/styles.css');
+
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('slotwise-theme') || 'light';
   });
@@ -26,6 +28,23 @@ export default function LandingPage() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('slotwise-theme', theme);
   }, [theme]);
+
+  // Lock scroll & handle ESC when modal is open
+  useEffect(() => {
+    if (modalOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') setModalOpen(false);
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [modalOpen]);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -483,122 +502,129 @@ export default function LandingPage() {
       </footer>
 
       {/* ACCESS MODAL */}
-      {modalOpen && (
-        <div className="am-root" role="dialog" aria-modal="true">
-          <div className="am-panel" tabIndex="-1">
-            <div className="am-head">
-              <div>
-                <div className="am-eyebrow">
-                  <i className="am-tick"></i> Access
-                </div>
-                <h2 className="am-title">How are you signing in?</h2>
-                <p className="am-sub">
-                  Pick the account you hold. This only decides which sign-in form you get next.
-                </p>
+      <div
+        className={`am-root ${modalOpen ? 'is-open' : ''}`}
+        id="accessModal"
+        aria-hidden={!modalOpen}
+        onClick={(e) => {
+          if (e.target.id === 'accessModal' || e.target.classList.contains('am-root')) {
+            setModalOpen(false);
+          }
+        }}
+      >
+        <div className="am-panel" role="dialog" aria-modal="true" tabIndex="-1">
+          <div className="am-head">
+            <div>
+              <div className="am-eyebrow">
+                <i className="am-tick"></i> Access
               </div>
-              <button
-                className="am-close"
-                type="button"
-                onClick={() => setModalOpen(false)}
-                aria-label="Close"
-              >
-                &times;
-              </button>
+              <h2 className="am-title">How are you signing in?</h2>
+              <p className="am-sub">
+                Pick the account you hold. This only decides which sign-in form you get next.
+              </p>
             </div>
+            <button
+              className="am-close"
+              type="button"
+              onClick={() => setModalOpen(false)}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+          </div>
 
-            <div className="am-viewport">
-              {modalStep === 'role' ? (
-                <div className="am-step">
-                  <div className="am-options">
-                    <button
-                      className="am-option"
-                      type="button"
-                      onClick={() => setModalStep('company')}
-                    >
-                      <span>
-                        <span className="am-opt-tag">Organization</span>
-                        <span className="am-opt-name">Company</span>
-                        <span className="am-opt-desc">
-                          You work for a company whose warehouses run on OptiVault.
-                        </span>
+          <div className="am-viewport">
+            {modalStep === 'role' ? (
+              <div className="am-step" data-am-step="role">
+                <div className="am-options">
+                  <button
+                    className="am-option"
+                    type="button"
+                    onClick={() => setModalStep('company')}
+                  >
+                    <span>
+                      <span className="am-opt-tag">Organization</span>
+                      <span className="am-opt-name">Company</span>
+                      <span className="am-opt-desc">
+                        You work for a company whose warehouses run on OptiVault.
                       </span>
-                      <span className="am-arrow" aria-hidden="true">&rarr;</span>
-                    </button>
+                    </span>
+                    <span className="am-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
 
-                    <button
-                      className="am-option"
-                      type="button"
-                      onClick={() => handleRoleSelect('platform-admin')}
-                    >
-                      <span>
-                        <span className="am-opt-tag">Internal</span>
-                        <span className="am-opt-name">Platform admin</span>
-                        <span className="am-opt-desc">
-                          OptiVault staff overseeing every client company and approving new warehouses.
-                        </span>
+                  <button
+                    className="am-option"
+                    type="button"
+                    onClick={() => handleRoleSelect('platform-admin')}
+                  >
+                    <span>
+                      <span className="am-opt-tag">Internal</span>
+                      <span className="am-opt-name">Platform admin</span>
+                      <span className="am-opt-desc">
+                        OptiVault staff overseeing every client company and approving new warehouses.
                       </span>
-                      <span className="am-arrow" aria-hidden="true">&rarr;</span>
-                    </button>
-                  </div>
+                    </span>
+                    <span className="am-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="am-step">
-                  <div className="am-trail">
-                    <button
-                      className="am-back"
-                      type="button"
-                      onClick={() => setModalStep('role')}
-                    >
-                      &larr; Back
-                    </button>
-                    <span className="am-trail-sep">/</span>
-                    <span>Company</span>
-                  </div>
-
-                  <div className="am-options">
-                    <button
-                      className="am-option"
-                      type="button"
-                      onClick={() => handleRoleSelect('company-admin')}
-                    >
-                      <span>
-                        <span className="am-opt-tag">Oversight</span>
-                        <span className="am-opt-name">Company admin</span>
-                        <span className="am-opt-desc">
-                          See every warehouse in your organization. View only — no stock changes.
-                        </span>
-                      </span>
-                      <span className="am-arrow" aria-hidden="true">&rarr;</span>
-                    </button>
-
-                    <button
-                      className="am-option"
-                      type="button"
-                      onClick={() => handleRoleSelect('supervisor')}
-                    >
-                      <span>
-                        <span className="am-opt-tag">Warehouse floor</span>
-                        <span className="am-opt-name">Supervisor</span>
-                        <span className="am-opt-desc">
-                          Pick the warehouse you're assigned to. Each one needs its own passcode.
-                        </span>
-                      </span>
-                      <span className="am-arrow" aria-hidden="true">&rarr;</span>
-                    </button>
-                  </div>
+              </div>
+            ) : (
+              <div className="am-step" data-am-step="company">
+                <div className="am-trail">
+                  <button
+                    className="am-back"
+                    type="button"
+                    onClick={() => setModalStep('role')}
+                  >
+                    &larr; Back
+                  </button>
+                  <span className="am-trail-sep">/</span>
+                  <span>Company</span>
                 </div>
-              )}
-            </div>
 
-            <div className="am-foot">
-              <span>One sign-in per organization</span>
-              <span>
-                No account? <Link to="/signup" onClick={() => setModalOpen(false)}>Register your company</Link>
-              </span>
-            </div>
+                <div className="am-options">
+                  <button
+                    className="am-option"
+                    type="button"
+                    onClick={() => handleRoleSelect('company-admin')}
+                  >
+                    <span>
+                      <span className="am-opt-tag">Oversight</span>
+                      <span className="am-opt-name">Company admin</span>
+                      <span className="am-opt-desc">
+                        See every warehouse in your organization. View only — no stock changes.
+                      </span>
+                    </span>
+                    <span className="am-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
+
+                  <button
+                    className="am-option"
+                    type="button"
+                    onClick={() => handleRoleSelect('supervisor')}
+                  >
+                    <span>
+                      <span className="am-opt-tag">Warehouse floor</span>
+                      <span className="am-opt-name">Supervisor</span>
+                      <span className="am-opt-desc">
+                        Pick the warehouse you're assigned to. Each one needs its own passcode.
+                      </span>
+                    </span>
+                    <span className="am-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="am-foot">
+            <span>One sign-in per organization</span>
+            <span>
+              No account? <Link to="/signup" onClick={() => setModalOpen(false)}>Register your company</Link>
+            </span>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -14,10 +14,11 @@ import {
   mergeApprovedSites
 } from '../services/floorEngine';
 import { getApiUrl } from '../services/apiConfig';
-import '../css/admin.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 export default function CompanyDashboard() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/admin.css');
   const session = getSession();
   const companyName = session?.company || 'Demo company';
   const isDemo = !session;

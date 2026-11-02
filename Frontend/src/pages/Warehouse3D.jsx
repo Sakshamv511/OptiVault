@@ -11,8 +11,10 @@ import {
   usedVolume,
   usedWeight
 } from '../services/floorEngine';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 export default function Warehouse3D() {
+  usePageStylesheet('/css/floor.css');
   const [searchParams] = useSearchParams();
   const targetId = searchParams.get('id') || activeWarehouseId() || 'WH-MOH';
 

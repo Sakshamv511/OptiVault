@@ -9,10 +9,11 @@ import {
   initialsOf,
   FLOOR_KEYS
 } from '../services/floorEngine';
-import '../css/floor.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 export default function WarehouseSelect() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/floor.css');
   const session = getSession();
   const companyName = session?.company || 'Demo company';
   const isDemo = !session;

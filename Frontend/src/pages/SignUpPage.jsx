@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerCompany } from '../services/authService';
-import '../css/sigin.css';
+import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 const SAMPLE_SLOTS = [
   { id: 'A01', target: 92 },
@@ -16,6 +16,7 @@ const SAMPLE_SLOTS = [
 
 export default function SignUpPage() {
   const navigate = useNavigate();
+  usePageStylesheet('/css/sigin.css');
   const [companyName, setCompanyName] = useState('');
   const [contactName, setContactName] = useState('');
   const [workEmail, setWorkEmail] = useState('');
