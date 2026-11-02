@@ -162,7 +162,7 @@ export default function SignUpPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} noValidate>
+            <form id="signupForm" onSubmit={handleSubmit} noValidate>
               <label className="field-label" htmlFor="companyName">
                 COMPANY NAME
               </label>
@@ -236,8 +236,19 @@ export default function SignUpPage() {
                       type="button"
                       className="pw-toggle"
                       onClick={() => setShowPassword(!showPassword)}
-                      aria-label="Toggle password"
-                    />
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M2.5 2.5l15 15M8.3 8.4a2.6 2.6 0 0 0 3.4 3.4M5.6 5.7C3.4 7 1 10 1 10s3.5 6 9 6c1.4 0 2.7-.4 3.8-1M12.3 4.3C11.6 4.1 10.8 4 10 4c-5.5 0-9 6-9 6" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" />
+                          <circle cx="10" cy="10" r="2.6" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -258,8 +269,19 @@ export default function SignUpPage() {
                       type="button"
                       className="pw-toggle"
                       onClick={() => setShowConfirm(!showConfirm)}
-                      aria-label="Toggle confirm password"
-                    />
+                      aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirm ? (
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M2.5 2.5l15 15M8.3 8.4a2.6 2.6 0 0 0 3.4 3.4M5.6 5.7C3.4 7 1 10 1 10s3.5 6 9 6c1.4 0 2.7-.4 3.8-1M12.3 4.3C11.6 4.1 10.8 4 10 4c-5.5 0-9 6-9 6" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" />
+                          <circle cx="10" cy="10" r="2.6" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

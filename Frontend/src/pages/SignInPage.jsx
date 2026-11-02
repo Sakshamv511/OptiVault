@@ -226,7 +226,7 @@ export default function SignInPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} noValidate>
+            <form id="signinForm" onSubmit={handleSubmit} noValidate>
               <label className="field-label" htmlFor="orgEmail">
                 {currentRoleInfo.emailLabel}
               </label>
