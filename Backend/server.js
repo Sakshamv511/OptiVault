@@ -51,8 +51,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve frontend static files seamlessly if running monolithic or local
-app.use(express.static(path.join(__dirname, '../Frontend')));
-app.use(express.static(path.join(__dirname)));
+const distPath = path.join(__dirname, '../Frontend/dist');
+const fs = require('fs');
+
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+} else {
+  app.use(express.static(path.join(__dirname, '../Frontend')));
+}
 
 // API Root Status
 app.get('/api', (req, res) => {
@@ -87,6 +93,17 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/warehouse', warehouseRoutes);
+
+// SPA client-side routing fallback for React
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api')) {
+    return next();
+  }
+  const indexPath = fs.existsSync(distPath)
+    ? path.join(distPath, 'index.html')
+    : path.join(__dirname, '../Frontend/index.html');
+  res.sendFile(indexPath);
+});
 
 // Error Handling Middleware
 app.use(notFound);
