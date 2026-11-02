@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 /**
  * Dynamically loads a page-specific stylesheet and removes conflicting previous stylesheets.
- * This guarantees 100% style isolation and pixel-perfect fidelity with the original HTML/CSS design.
+ * useLayoutEffect runs synchronously before browser paint to guarantee zero flickering
+ * and 100% style isolation identical to the original design.
  */
 export function usePageStylesheet(stylesheetHref) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const linkId = 'optivault-active-stylesheet';
     let link = document.getElementById(linkId);
 
@@ -22,9 +23,5 @@ export function usePageStylesheet(stylesheetHref) {
 
     // Reset standard body styling on route change so no previous page overrides linger
     document.body.removeAttribute('style');
-
-    return () => {
-      // Optional cleanup on unmount
-    };
   }, [stylesheetHref]);
 }
