@@ -93,7 +93,7 @@ export default function LandingPage() {
             <a href="#start">START</a>
             <button
               type="button"
-              className="btn-account"
+              className="btn-account mono"
               onClick={() => {
                 setModalStep('role');
                 setModalOpen(true);
