@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { registerCompany } from '../services/authService';
+import { registerCompany, loginWithGoogle } from '../services/authService';
 import { usePageStylesheet } from '../hooks/usePageStylesheet';
 
 const SAMPLE_SLOTS = [
@@ -30,6 +30,70 @@ export default function SignUpPage() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [reference, setReference] = useState('');
+  const googleBtnRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const clientId = window.__GOOGLE_CLIENT_ID__ || '304461158169-1ibf3i818r8a40hlrbtf1iub6b8tf8la.apps.googleusercontent.com';
+
+    const renderGoogleBtn = () => {
+      if (!isMounted || !googleBtnRef.current || !window.google?.accounts?.id) return;
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (response) => {
+            if (!response?.credential) {
+              setError('Google registration was cancelled.');
+              return;
+            }
+            setLoading(true);
+            const result = await loginWithGoogle(response.credential, 'company-admin');
+            setLoading(false);
+            if (result.ok) {
+              navigate('/company-dashboard');
+            } else {
+              setError(result.message || 'Google registration was declined.');
+            }
+          },
+          auto_select: false
+        });
+
+        googleBtnRef.current.innerHTML = '';
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          type: 'standard',
+          shape: 'rectangular',
+          theme: 'outline',
+          text: 'signup_with',
+          size: 'large',
+          logo_alignment: 'left',
+          width: 320
+        });
+      } catch (err) {
+        console.warn('Google Signup Render Error:', err);
+      }
+    };
+
+    if (window.google?.accounts?.id) {
+      renderGoogleBtn();
+    } else {
+      const existing = document.getElementById('gsi-script');
+      if (!existing) {
+        const script = document.createElement('script');
+        script.id = 'gsi-script';
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = renderGoogleBtn;
+        document.head.appendChild(script);
+      } else {
+        existing.addEventListener('load', renderGoogleBtn);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -161,6 +225,68 @@ export default function SignUpPage() {
                 {error}
               </div>
             )}
+
+            {/* Google Registration Option */}
+            <div className="google-auth-box" id="googleAuthBox" style={{ marginBottom: 20 }}>
+              <div
+                ref={googleBtnRef}
+                id="googleBtnHost"
+                style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }}
+              >
+                <button
+                  type="button"
+                  className="google-btn-fake"
+                  onClick={() => {
+                    if (!window.google?.accounts?.id) {
+                      setError('Google Sign-In is initializing. Please verify network access.');
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    width: '100%',
+                    maxWidth: 320,
+                    padding: '9px 16px',
+                    background: '#ffffff',
+                    border: '1px solid #dadce0',
+                    borderRadius: 4,
+                    fontFamily: 'inherit',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#3c4043',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z" />
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" />
+                    <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.347 2.825.957 4.039l3.007-2.332z" />
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" />
+                  </svg>
+                  <span>Sign up with Google</span>
+                </button>
+              </div>
+              <div
+                className="auth-divider"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  margin: '18px 0 10px',
+                  color: '#8e877e',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.1em'
+                }}
+              >
+                <span style={{ flex: 1, borderBottom: '1px solid #e2ddd5' }}></span>
+                <span style={{ padding: '0 10px' }}>OR REGISTER WITH FORM</span>
+                <span style={{ flex: 1, borderBottom: '1px solid #e2ddd5' }}></span>
+              </div>
+            </div>
 
             <form id="signupForm" onSubmit={handleSubmit} noValidate>
               <label className="field-label" htmlFor="companyName">

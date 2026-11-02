@@ -72,6 +72,35 @@ export async function loginUser(email, password, role) {
   }
 }
 
+export async function loginWithGoogle(credential, role = 'company-admin') {
+  const url = getApiUrl('/api/auth/google');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential, role })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success && data.token) {
+      localStorage.setItem(AUTH_KEYS.jwt, data.token);
+      const session = data.user || { role, company: data.user?.company || 'Google Account' };
+      saveSession(session);
+      return { ok: true, session, message: data.message };
+    }
+
+    return {
+      ok: false,
+      message: data.message || 'Google authentication was declined.'
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: 'Could not connect to Google authentication service. Verify backend is running.'
+    };
+  }
+}
+
 export async function registerCompany(details) {
   const url = getApiUrl('/api/auth/register');
   try {
